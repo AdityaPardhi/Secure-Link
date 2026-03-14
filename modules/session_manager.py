@@ -11,7 +11,7 @@ and allows the server to track them.
 """
 
 # =========================================
-# 👤 ACTIVE USERS
+# 👤 ACTIVE USERS COUNT
 # =========================================
 
 # Dictionary storing currently connected users.
