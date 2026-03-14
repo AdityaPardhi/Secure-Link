@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>SecureLink — LAN Communication</title>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+</head>
+
+
+<body>
+
+<!-- LOGIN OVERLAY -->
+
+<div id="login-overlay">
+
+    <div class="login-box">
+
+        <div class="login-header">
+
+            <div class="login-title">SecureLink</div>
+
+            <div class="login-subtitle">
+                // LAN COMMUNICATION TERMINAL v2.4
+            </div>
+
+        </div>
+
+        <div class="login-body">
+
+            <div class="field-wrap">
+
+                <label class="field-label">Identifier</label>
+
+                <input class="field-input"
+                       id="username"
+                       placeholder="enter username"
+                       autocomplete="off">
+
+            </div>
+
+            <div class="field-wrap">
+
+                <label class="field-label">Access Key</label>
+
+                <input class="field-input"
+                       id="password"
+                       type="password"
+                       placeholder="••••••••">
+
+            </div>
+
+            <button class="login-btn" onclick="join()">
+                Request Access
+            </button>
+
+        </div>
+
+        <div class="login-footer">
+            ⬡ END-TO-END ENCRYPTED · LOCAL AREA NETWORK ONLY
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- PENDING APPROVAL OVERLAY -->
+
+<div id="pending-overlay">
+
+    <div class="pending-box">
+
+        <div class="spinner"></div>
+
+        <div class="pending-title">
+            Awaiting Admin Approval
+        </div>
+
+        <div class="pending-sub">
+            // Request transmitted — stand by
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- MAIN APP -->
+
+<div class="app-shell">
+
+
+<!-- TOP BAR -->
+
+<div class="topbar">
+
+    <div class="topbar-logo">
+
+        <div class="logo-icon">
+
+            <svg viewBox="0 0 16 16">
+                <path d="M8 1L2 4v4c0 3.3 2.5 6.4 6 7 3.5-.6 6-3.7 6-7V4L8 1z"/>
+            </svg>
+
+        </div>
+
+        <div>
+
+            <div class="logo-text">SecureLink</div>
+
+            <div class="logo-sub">LAN Terminal</div>
+
+        </div>
+
+    </div>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="status-pill" id="conn-status">
+
+        <span class="status-dot"></span> Connected
+
+    </div>
+
+    <div class="corner-decor">
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+
+</div>
+
+
+<!-- MAIN AREA -->
+
+<div class="main">
+
+
+<!-- SIDEBAR -->
+
+<div class="sidebar">
+
+    <div class="sidebar-section">
+        Online Users
+    </div>
+
+    <ul id="users">
+
+        <li class="no-users" style="list-style:none">
+            — none —
+        </li>
+
+    </ul>
+
+</div>
+
+
+<!-- CHAT -->
+
+<div class="chat-panel" id="chat-visible">
+
+    <div id="messages"></div>
+
+    <div class="input-bar">
+
+        <div class="input-wrap">
+
+            <input id="message"
+                   placeholder="transmit message…"
+                   autocomplete="off">
+
+        </div>
+
+        <button class="send-btn"
+                onclick="sendMessage()">
+
+            Send
+
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- LOCKED STATE -->
+
+<div id="locked-panel">
+
+<svg width="40" height="40" viewBox="0 0 24 24"
+     fill="none"
+     stroke="#1f2d3d"
+     stroke-width="1.5">
+
+<rect x="3" y="11" width="18" height="11" rx="2"/>
+
+<path d="M7 11V7a5 5 0 0110 0v4"/>
+
+</svg>
+
+<span>
+
+AWAITING AUTHENTICATION
+
+</span>
+
+</div>
+
+</div>
+
+</div>
+
+
+
+<!-- JAVASCRIPT FILES -->
+
+<script src="{{ url_for('static', filename='js/socket.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+
+
+</body>
+
+</html>

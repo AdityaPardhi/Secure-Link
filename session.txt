@@ -1,0 +1,591 @@
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 43.53 seconds
+Total Messages Sent     : 9
+Total Data Transferred  : 55 bytes
+Average Throughput      : 1.26 bytes/sec
+Total Unique Packets    : 9
+Blocked IPs             : []
+==============================
+Session End Time        : 23-02-2026 22:53:25
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 63.81 seconds
+Total Messages Sent     : 93
+Total Data Transferred  : 377 bytes
+Average Throughput      : 5.91 bytes/sec
+Total Unique Packets    : 93
+Blocked IPs             : []
+==============================
+Session End Time        : 23-02-2026 22:54:56
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 118.35 seconds
+Total Messages Sent     : 4
+Total Data Transferred  : 51 bytes
+Average Throughput      : 0.43 bytes/sec
+Total Unique Packets    : 4
+Blocked IPs             : []
+==============================
+Session End Time        : 07-03-2026 15:26:43
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 497.17 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 07-03-2026 17:44:31
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 4787.03 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 07-03-2026 19:04:32
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 308.14 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 07-03-2026 19:09:49
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 129.3 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 07-03-2026 19:12:02
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 250.97 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 07-03-2026 19:16:31
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 110.69 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 07-03-2026 19:19:44
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 102.31 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 08-03-2026 15:06:07
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 140.03 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 08-03-2026 15:09:23
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 1589.21 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 08-03-2026 15:35:55
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 10.106.168.2
+Session Duration        : 165.23 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 10-03-2026 23:35:08
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.0.200
+Session Duration        : 127.76 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 10-03-2026 23:37:21
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 62.3 seconds
+Total Messages Sent     : 4
+Total Data Transferred  : 39 bytes
+Average Throughput      : 0.63 bytes/sec
+Total Unique Packets    : 4
+==============================
+Session End Time        : 10-03-2026 23:55:44
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 130.4 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 12:30:01
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 177.51 seconds
+Total Messages Sent     : 11
+Total Data Transferred  : 95 bytes
+Average Throughput      : 0.54 bytes/sec
+Total Unique Packets    : 11
+==============================
+Session End Time        : 11-03-2026 12:35:16
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 207.9 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 12:39:08
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 97.45 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 12:40:47
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 466.93 seconds
+Total Messages Sent     : 153
+Total Data Transferred  : 467 bytes
+Average Throughput      : 1.0 bytes/sec
+Total Unique Packets    : 153
+==============================
+Session End Time        : 11-03-2026 12:50:16
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 51.52 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 12:51:34
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 138.78 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 12:53:55
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 453.85 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 13:01:31
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 96.6 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 13:03:32
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 2924.08 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 13:52:18
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 105.88 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 13:54:07
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 97.28 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 13:55:46
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 71.86 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 13:57:00
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 67.74 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 13:58:11
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 286.21 seconds
+Total Messages Sent     : 4
+Total Data Transferred  : 28 bytes
+Average Throughput      : 0.1 bytes/sec
+Total Unique Packets    : 4
+==============================
+Session End Time        : 11-03-2026 14:03:06
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 115.29 seconds
+Total Messages Sent     : 4
+Total Data Transferred  : 52 bytes
+Average Throughput      : 0.45 bytes/sec
+Total Unique Packets    : 4
+==============================
+Session End Time        : 11-03-2026 14:18:35
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 95.94 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 14:20:36
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 102.14 seconds
+Total Messages Sent     : 1
+Total Data Transferred  : 3 bytes
+Average Throughput      : 0.03 bytes/sec
+Total Unique Packets    : 1
+==============================
+Session End Time        : 11-03-2026 14:22:20
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 59.4 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 14:24:30
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 211.64 seconds
+Total Messages Sent     : 5
+Total Data Transferred  : 17 bytes
+Average Throughput      : 0.08 bytes/sec
+Total Unique Packets    : 5
+==============================
+Session End Time        : 11-03-2026 14:28:03
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 900.17 seconds
+Total Messages Sent     : 85
+Total Data Transferred  : 225 bytes
+Average Throughput      : 0.25 bytes/sec
+Total Unique Packets    : 85
+==============================
+Session End Time        : 11-03-2026 14:43:06
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 127.0.0.1
+Session Duration        : 43.6 seconds
+Total Messages Sent     : 11
+Total Data Transferred  : 45 bytes
+Average Throughput      : 1.03 bytes/sec
+Total Unique Packets    : 11
+==============================
+Session End Time        : 11-03-2026 14:43:52
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 10.106.168.2
+Session Duration        : 5.25 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 14:44:00
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 10.106.168.2
+Session Duration        : 171.29 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 14:46:54
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 451.7 seconds
+Total Messages Sent     : 9
+Total Data Transferred  : 37 bytes
+Average Throughput      : 0.08 bytes/sec
+Total Unique Packets    : 9
+==============================
+Session End Time        : 11-03-2026 15:03:38
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 58.03 seconds
+Total Messages Sent     : 0
+Total Data Transferred  : 0 bytes
+Average Throughput      : 0.0 bytes/sec
+Total Unique Packets    : 0
+==============================
+Session End Time        : 11-03-2026 15:04:44
+==============================
+
+
+==============================
+ SECURE SESSION REPORT
+==============================
+Server IP               : 192.168.137.1
+Session Duration        : 154.74 seconds
+Total Messages Sent     : 3
+Total Data Transferred  : 11 bytes
+Average Throughput      : 0.07 bytes/sec
+Total Unique Packets    : 3
+==============================
+Session End Time        : 11-03-2026 15:18:43
+==============================
+
