@@ -85,6 +85,19 @@ def _broadcast_stats():
 threading.Thread(target=_broadcast_stats, daemon=True).start()
 
 
+def _intrusion_alert(alert_type: str, ip: str, username: str = "", count: int = 0):
+    """Push a real-time intrusion event to the admin dashboard."""
+    if _admin_sid:
+        socketio.emit("intrusion_alert", {
+            "type":     alert_type,
+            "ip":       ip,
+            "username": username,
+            "count":    count,
+            "time":     datetime.now().strftime("%H:%M:%S"),
+        }, room=_admin_sid)
+    logger.warning("INTRUSION [%s] ip=%s user=%s attempt=%s", alert_type, ip, username, count)
+
+
 # =========================================
 # ROUTES
 # =========================================
@@ -113,11 +126,13 @@ def handle_join(data):
     client_ip = request.remote_addr
 
     if security.is_blocked(client_ip):
+        _intrusion_alert("blocked_ip_retry", client_ip, username)
         emit("rejected", {"reason": "IP blocked due to multiple failed attempts"})
         disconnect(sid)
         return
 
     if not security.is_allowed(client_ip):
+        _intrusion_alert("unauthorized_ip", client_ip, username)
         emit("rejected", {"reason": "IP not authorized"})
         disconnect(sid)
         return
@@ -128,7 +143,9 @@ def handle_join(data):
 
     if hashlib.sha256(password.encode()).hexdigest() != SESSION_PASSWORD_HASH:
         count = security.record_failure(client_ip)
-        logger.warning("Bad password | user=%s ip=%s attempt=%d", username, client_ip, count)
+        blocked = security.is_blocked(client_ip)
+        alert_type = "ip_blocked" if blocked else "bad_password"
+        _intrusion_alert(alert_type, client_ip, username, count)
         emit("rejected", {"reason": "Invalid access key"})
         return
 
