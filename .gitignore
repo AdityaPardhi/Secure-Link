@@ -9,3 +9,6 @@ session.txt
 .env
 venv/
 *.log
+
+# Local planning docs — not part of the codebase
+Changes.md

@@ -1,49 +1,51 @@
 /* ============================================================
    SecureLink — socket.js
-   Handles all Socket.IO event listeners
+   Handles all Socket.IO event listeners.
+
+   Fix #19: var → const/let throughout
    ============================================================ */
 
-var socket = io();
+const socket = io();
 
 /* ── Connection events ─────────────────────────────────────── */
 socket.on("connect", function () {
     console.log("Socket connected:", socket.id);
 
-    var pill = document.getElementById("conn-status");
+    const pill = document.getElementById("conn-status");
     if (pill) {
         pill.innerHTML = '<span class="status-dot"></span> Connected';
         pill.style.color = '';
     }
 });
 
-/* Disconnect — includes reason for debugging (improvement #4) */
+/* Disconnect — includes reason for debugging */
 socket.on("disconnect", function (reason) {
     console.warn("Disconnected:", reason);
 
-    var pill = document.getElementById("conn-status");
+    const pill = document.getElementById("conn-status");
     if (pill) {
         pill.innerHTML = '<span class="status-dot" style="background:var(--danger);animation:none;box-shadow:none"></span> Disconnected';
         pill.style.color = 'var(--danger)';
     }
 });
 
-/* Connection error — server offline or unreachable (improvement #1) */
+/* Connection error — server offline or unreachable */
 socket.on("connect_error", function (err) {
     console.warn("Connection error — server may be offline:", err.message);
 
-    var pill = document.getElementById("conn-status");
+    const pill = document.getElementById("conn-status");
     if (pill) {
         pill.innerHTML = '<span class="status-dot" style="background:var(--danger);animation:none"></span> Connection Error';
         pill.style.color = 'var(--danger)';
     }
 });
 
-/* Auto-reconnect notification (improvement #3) */
+/* Auto-reconnect notification */
 socket.on("reconnect", function (attempt) {
     console.log("Reconnected to server after", attempt, "attempt(s)");
     Chat.appendSystem("Connection restored.");
 
-    var pill = document.getElementById("conn-status");
+    const pill = document.getElementById("conn-status");
     if (pill) {
         pill.innerHTML = '<span class="status-dot"></span> Connected';
         pill.style.color = '';

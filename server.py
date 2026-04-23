@@ -1,39 +1,87 @@
-from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit, disconnect
+"""
+SecureLink — server.py
+Flask + SocketIO server for the Secure LAN Communication System.
+
+Fixes applied:
+  #1  — SECRET_KEY generated at startup, not hardcoded
+  #2  — Session password hashed with SHA-256; only hashes compared
+  #4  — 500-character message size limit
+  #5  — Username uniqueness enforced before approval
+  #7  — Per-user 500 ms message rate limit
+  #9  — Reliable LAN IP detection via UDP probe
+  #11 — Dead commented-out code removed
+  #13 — logging used throughout instead of print()
+"""
+
+import os
+import secrets
+import hashlib
+import logging
 import threading
 import time
 import uuid
 from datetime import datetime
 import socket
 
-# Import modules
-from modules.security import failed_attempts, blocked_ips, allowed_ips
-from modules.session_manager import active_users
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit, disconnect
+
 import modules.network_monitor as monitor
-# from modules.network_monitor import *
+from modules.security       import security
+from modules.session_manager import sessions
+
+# =========================================
+# 🪵 LOGGING SETUP  (fix #13)
+# =========================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# =========================================
+# 🔐 APP + SECRET KEY  (fix #1)
+# =========================================
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'securelink_secret'
-socketio = SocketIO(app, async_mode='threading')
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+
+socketio = SocketIO(app, async_mode="threading")
 
 # =========================================
-# 🔐 SESSION INITIALIZATION
+# 🔐 SESSION INITIALIZATION  (fix #2, #9)
 # =========================================
 
-print("\n=== SECURE LAN SERVER INITIALIZING ===")
+logger.info("=== SECURE LAN SERVER INITIALIZING ===")
 
-SESSION_PASSWORD = input("Set session access key: ").strip()
+_raw_password = input("Set session access key: ").strip()
 
-if not SESSION_PASSWORD:
-    print("Access key cannot be empty. Exiting.")
-    exit()
+if not _raw_password:
+    logger.error("Access key cannot be empty. Exiting.")
+    raise SystemExit(1)
 
-hostname = socket.gethostname()
-server_ip = socket.gethostbyname(hostname)
+# Store only the hash — never the plaintext (fix #2)
+SESSION_PASSWORD_HASH = hashlib.sha256(_raw_password.encode()).hexdigest()
+del _raw_password  # remove plaintext from memory immediately
 
-print("Session access key set successfully.")
-print("Server running on:", server_ip)
-print("Waiting for users...\n")
+# Reliable LAN IP detection (fix #9)
+try:
+    _s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    _s.connect(("8.8.8.8", 80))
+    server_ip = _s.getsockname()[0]
+    _s.close()
+except OSError:
+    server_ip = socket.gethostbyname(socket.gethostname())
+
+logger.info("Session access key set successfully.")
+logger.info("Server running on: %s", server_ip)
+logger.info("Waiting for users...\n")
+
+# ─── Rate limiter (fix #7) ────────────────────────────────────
+_last_message_time: dict = {}
+_MESSAGE_COOLDOWN = 0.5   # seconds
+_MAX_MESSAGE_LEN  = 500   # characters (fix #4)
 
 
 # =========================================
@@ -46,120 +94,118 @@ def index():
 
 
 # =========================================
-# 🔐 JOIN HANDLER
+# 🔐 JOIN HANDLER  (fixes #2, #5)
 # =========================================
 
 @socketio.on("join_request")
 def handle_join(data):
 
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-
-    sid = request.sid
+    username  = data.get("username", "").strip()
+    password  = data.get("password", "").strip()
+    sid       = request.sid
     client_ip = request.remote_addr
     current_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
 
-    # 🚫 Blocked IP
-    if client_ip in blocked_ips:
+    # ── Blocked IP ────────────────────────────────────────────
+    if security.is_blocked(client_ip):
         emit("rejected", {"reason": "IP blocked due to multiple failed attempts"}, room=sid)
         disconnect(sid)
-        print("Blocked IP attempted:", client_ip)
+        logger.warning("Blocked IP attempted: %s", client_ip)
         return
 
-    # 🔥 IP whitelist
-    if allowed_ips and client_ip not in allowed_ips:
+    # ── IP whitelist ──────────────────────────────────────────
+    if not security.is_allowed(client_ip):
         emit("rejected", {"reason": "IP not authorized"}, room=sid)
         disconnect(sid)
-        print("Unauthorized IP:", client_ip)
+        logger.warning("Unauthorized IP: %s", client_ip)
         return
 
+    # ── Username required ─────────────────────────────────────
     if not username:
         emit("rejected", {"reason": "Username required"}, room=sid)
         disconnect(sid)
         return
 
-    # 🔐 Wrong password
-    if password != SESSION_PASSWORD:
+    # ── Password check — compare hashes only (fix #2) ─────────
+    incoming_hash = hashlib.sha256(password.encode()).hexdigest()
+    if incoming_hash != SESSION_PASSWORD_HASH:
 
-        failed_attempts[client_ip] = failed_attempts.get(client_ip, 0) + 1
+        count = security.record_failure(client_ip)
 
-        print("\n⚠ UNAUTHORIZED ACCESS ATTEMPT")
-        print("User:", username)
-        print("IP:", client_ip)
-        print("Time:", current_time)
-        print("Attempt count:", failed_attempts[client_ip])
-
-        if failed_attempts[client_ip] >= 3:
-            blocked_ips.add(client_ip)
-            print("🚫 IP BLOCKED:", client_ip)
+        logger.warning(
+            "UNAUTHORIZED ACCESS ATTEMPT | user=%s ip=%s time=%s attempt=%d",
+            username, client_ip, current_time, count,
+        )
 
         emit("rejected", {"reason": "Invalid access key"}, room=sid)
-        return  # ← disconnect(sid) removed so frontend lock resets correctly
+        return
 
-    # Reset attempts
-    failed_attempts.pop(client_ip, None)
+    # Reset failure counter on correct password
+    security.clear_failures(client_ip)
 
-    print(f"\nJoin request from: {username} | IP: {client_ip}")
+    # ── Username uniqueness (fix #5) ──────────────────────────
+    if sessions.username_taken(username):
+        emit("rejected", {"reason": "Username already taken"}, room=sid)
+        return
+
+    logger.info("Join request from: %s | IP: %s", username, client_ip)
     decision = input("Approve this user? (y/n): ")
 
     if decision.lower() == "y":
 
-        active_users[sid] = username
+        sessions.add(sid, username)
 
         emit("approved", room=sid)
 
-        socketio.emit("update_users", list(active_users.values()))
+        socketio.emit("update_users", sessions.all_usernames())
         socketio.emit("system_message", f"{username} joined the secure session.")
 
-        print(f"{username} approved.\n")
+        logger.info("%s approved.", username)
 
     else:
 
         emit("rejected", {"reason": "Admin rejected"}, room=sid)
         disconnect(sid)
 
-        print(f"{username} rejected.\n")
+        logger.info("%s rejected.", username)
 
 
 # =========================================
-# 💬 MESSAGE HANDLER
+# 💬 MESSAGE HANDLER  (fixes #4, #7)
 # =========================================
 
 @socketio.on("send_message")
 def handle_message(data):
 
-    # global total_messages, total_bytes, packet_counter
+    sid = request.sid
+
+    # ── Rate limit (fix #7) ───────────────────────────────────
+    now = time.time()
+    if now - _last_message_time.get(sid, 0) < _MESSAGE_COOLDOWN:
+        return
+    _last_message_time[sid] = now
 
     message = data.get("message", "").strip()
 
     if not message:
         return
 
-    username = active_users.get(request.sid, "Unknown")
+    # ── Size limit (fix #4) ───────────────────────────────────
+    if len(message) > _MAX_MESSAGE_LEN:
+        emit("error", {"reason": f"Message exceeds {_MAX_MESSAGE_LEN} character limit."})
+        return
 
-    monitor.packet_counter += 1
-    packet_id = monitor.packet_counter
-
-    monitor.total_messages += 1
-    monitor.total_bytes += len(message.encode())
-
-    # # 📦 Packet Simulation
-    # packet_counter += 1
-    # packet_id = packet_counter
-
-    # # 📊 Network monitoring
-    # total_messages += 1
-    # total_bytes += len(message.encode())
-
-    msg_id = str(uuid.uuid4())
+    username  = sessions.get_username(sid) or "Unknown"
+    packet_id = monitor.increment_stats(len(message.encode()))
+    msg_id    = str(uuid.uuid4())
 
     socketio.emit("receive_message", {
         "username": username,
-        "message": f"[Packet {packet_id}] {message}",
-        "id": msg_id
+        "message":  f"[Packet {packet_id}] {message}",
+        "id":       msg_id,
     })
 
-    # ⏳ Auto delete after 10 seconds
+    # ⏳ Auto-delete after 10 seconds
     def delete_message(mid):
         time.sleep(10)
         socketio.emit("delete_message", mid)
@@ -174,14 +220,16 @@ def handle_message(data):
 @socketio.on("disconnect")
 def handle_disconnect():
 
-    user = active_users.pop(request.sid, None)
+    sid  = request.sid
+    user = sessions.remove(sid)
+
+    # Clean up rate-limiter entry
+    _last_message_time.pop(sid, None)
 
     if user:
-
-        socketio.emit("update_users", list(active_users.values()))
+        socketio.emit("update_users", sessions.all_usernames())
         socketio.emit("system_message", f"{user} left the secure session.")
-
-        print(f"{user} disconnected")
+        logger.info("%s disconnected", user)
 
 
 # =========================================
@@ -191,10 +239,6 @@ def handle_disconnect():
 if __name__ == "__main__":
 
     try:
-
         socketio.run(app, host="0.0.0.0", port=5000)
-
     finally:
-
         monitor.generate_report(server_ip)
-        # generate_report(server_ip)

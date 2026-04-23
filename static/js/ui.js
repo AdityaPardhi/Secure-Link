@@ -1,33 +1,49 @@
 /* ============================================================
    SecureLink — ui.js
-   Handles UI state, login flow, and user list updates
+   Handles UI state, login flow, and user list updates.
+
+   Fix #17: login-btn wired via addEventListener (onclick removed from HTML)
+   Fix #18: alert() replaced with inline #login-error element
+   Fix #19: var → const/let throughout
    ============================================================ */
 
-var UI = (function () {
+const UI = (function () {
 
-    /* ── Login lock — prevents duplicate requests (improvement #1) */
-    var loginInProgress = false;
+    /* ── Login lock — prevents duplicate requests ─────────────── */
+    let loginInProgress = false;
+
+    /* ── Inline error helper (fix #18) ──────────────────────── */
+    function showLoginError(msg) {
+        const errEl = document.getElementById('login-error');
+        if (!errEl) return;
+        errEl.textContent = msg;
+        errEl.style.display = 'block';
+        /* Auto-clear after 4 s */
+        setTimeout(function () {
+            errEl.style.display = 'none';
+            errEl.textContent   = '';
+        }, 4000);
+    }
 
     /* ── Login ───────────────────────────────────────────────── */
     function join() {
-        /* Block if a request is already in flight (improvement #1) */
         if (loginInProgress) return;
 
-        var username = document.getElementById('username').value.trim();
-        var password = document.getElementById('password').value.trim();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
 
-        console.log('Login attempt:', username); /* debug log (improvement #2) */
+        console.log('Login attempt:', username);
 
-        /* Validate BEFORE locking — so empty fields don't block future attempts */
+        /* Validate before locking so empty fields don't block future attempts */
         if (!username || !password) {
             shakeEl(document.querySelector('.login-box'));
+            showLoginError('Identifier and Access Key are required.');
             return;
         }
 
-        loginInProgress = true; /* Lock only after validation passes */
+        loginInProgress = true;
 
-        // Show pending overlay
-        var pending = document.getElementById('pending-overlay');
+        const pending = document.getElementById('pending-overlay');
         if (pending) pending.classList.add('active');
 
         socket.emit('join_request', { username: username, password: password });
@@ -35,77 +51,72 @@ var UI = (function () {
 
     /* ── Approved ────────────────────────────────────────────── */
     function onApproved() {
-        console.log('User approved — secure session started'); /* debug log (improvement #2) */
+        console.log('User approved — secure session started');
 
-        // Hide login & pending overlays
-        var loginOverlay = document.getElementById('login-overlay');
+        const loginOverlay = document.getElementById('login-overlay');
         if (loginOverlay) {
             loginOverlay.style.transition = 'opacity 0.4s';
             loginOverlay.style.opacity = '0';
             setTimeout(function () { loginOverlay.style.display = 'none'; }, 400);
         }
 
-        var pending = document.getElementById('pending-overlay');
+        const pending = document.getElementById('pending-overlay');
         if (pending) pending.classList.remove('active');
 
-        // Swap locked panel -> chat panel
-        var locked = document.getElementById('locked-panel');
+        const locked = document.getElementById('locked-panel');
         if (locked) locked.style.display = 'none';
 
-        var chatPanel = document.getElementById('chat-visible');
+        const chatPanel = document.getElementById('chat-visible');
         if (chatPanel) {
             chatPanel.style.display = 'flex';
             chatPanel.style.flexDirection = 'column';
         }
 
-        // System welcome message
         Chat.appendSystem('Secure channel established. Welcome.');
 
-        // Focus input
-        var msgInput = document.getElementById('message');
+        const msgInput = document.getElementById('message');
         if (msgInput) setTimeout(function () { msgInput.focus(); }, 100);
     }
 
-    /* ── Rejected ────────────────────────────────────────────── */
+    /* ── Rejected (fix #18) ──────────────────────────────────── */
     function onRejected(reason) {
-        console.warn('Access rejected:', reason); /* debug log (improvement #2) */
+        console.warn('Access rejected:', reason);
 
-        /* Reset login lock so user can try again (improvement #1) */
+        /* Reset login lock so user can try again */
         loginInProgress = false;
 
-        var pending = document.getElementById('pending-overlay');
+        const pending = document.getElementById('pending-overlay');
         if (pending) pending.classList.remove('active');
 
-        var loginBox = document.querySelector('.login-box');
+        const loginBox = document.querySelector('.login-box');
         if (loginBox) {
             loginBox.classList.add('rejected');
             setTimeout(function () { loginBox.classList.remove('rejected'); }, 700);
             shakeEl(loginBox);
         }
 
-        /* Clear password field for security (improvement #4) */
-        var pass = document.getElementById('password');
+        /* Clear password field for security */
+        const pass = document.getElementById('password');
         if (pass) pass.value = '';
 
-        setTimeout(function () {
-            alert('Access Denied: ' + (reason || 'Unauthorized'));
-        }, 100);
+        /* Fix #18: inline error instead of alert() */
+        showLoginError('Access Denied: ' + (reason || 'Unauthorized'));
     }
 
     /* ── User List ───────────────────────────────────────────── */
     function updateUsers(users) {
-        var ul = document.getElementById('users');
+        const ul = document.getElementById('users');
         if (!ul) return;
         ul.innerHTML = '';
 
-        /* Update sidebar header with live count (improvement #3) */
-        var section = document.querySelector('.sidebar-section');
+        /* Update sidebar header with live count */
+        const section = document.querySelector('.sidebar-section');
         if (section) {
             section.textContent = 'Online Users' + (users && users.length ? ' (' + users.length + ')' : '');
         }
 
         if (!users || users.length === 0) {
-            var empty = document.createElement('li');
+            const empty = document.createElement('li');
             empty.className = 'no-users';
             empty.style.listStyle = 'none';
             empty.textContent = '— none —';
@@ -114,7 +125,7 @@ var UI = (function () {
         }
 
         users.forEach(function (user) {
-            var li = document.createElement('li');
+            const li = document.createElement('li');
             li.textContent = user;
             ul.appendChild(li);
         });
@@ -124,7 +135,6 @@ var UI = (function () {
     function shakeEl(el) {
         if (!el) return;
         el.classList.remove('shake');
-        // Force reflow to restart animation
         void el.offsetWidth;
         el.classList.add('shake');
         el.addEventListener('animationend', function handler() {
@@ -133,10 +143,10 @@ var UI = (function () {
         });
     }
 
-    /* ── Key bindings for login form ─────────────────────────── */
+    /* ── Key bindings for login form + button listener (fix #17) */
     document.addEventListener('DOMContentLoaded', function () {
-        var usernameInput = document.getElementById('username');
-        var passwordInput = document.getElementById('password');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
 
         if (usernameInput) {
             usernameInput.addEventListener('keypress', function (e) {
@@ -151,16 +161,20 @@ var UI = (function () {
                 if (e.key === 'Enter') join();
             });
         }
+
+        /* Fix #17: addEventListener replaces inline onclick */
+        const loginBtn = document.getElementById('login-btn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', join);
+        }
     });
 
     /* ── Reset login lock if socket disconnects ───────────────── */
     socket.on("disconnect", function () {
-
         loginInProgress = false;
 
-        var pending = document.getElementById("pending-overlay");
+        const pending = document.getElementById("pending-overlay");
         if (pending) pending.classList.remove("active");
-
     });
 
     return {
@@ -168,7 +182,7 @@ var UI = (function () {
         onApproved:  onApproved,
         onRejected:  onRejected,
         updateUsers: updateUsers,
-        shakeEl:     shakeEl
+        shakeEl:     shakeEl,
     };
 
 })();

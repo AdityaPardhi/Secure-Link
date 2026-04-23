@@ -1,9 +1,12 @@
 /* ============================================================
    SecureLink — chat.js
-   Handles message rendering and chat interactions
+   Handles message rendering and chat interactions.
+
+   Fix #17: send-btn wired via addEventListener (onclick removed from HTML)
+   Fix #19: var → const/let throughout
    ============================================================ */
 
-var Chat = (function () {
+const Chat = (function () {
 
     /* ── Helpers ─────────────────────────────────────────────── */
     function escHtml(str) {
@@ -15,7 +18,7 @@ var Chat = (function () {
     }
 
     function timestamp() {
-        var now = new Date();
+        const now = new Date();
         return now.getHours().toString().padStart(2, '0') +
                ':' +
                now.getMinutes().toString().padStart(2, '0') +
@@ -24,16 +27,16 @@ var Chat = (function () {
     }
 
     function scrollBottom() {
-        var msgs = document.getElementById('messages');
+        const msgs = document.getElementById('messages');
         if (msgs) msgs.scrollTop = msgs.scrollHeight;
     }
 
     /* ── Public API ──────────────────────────────────────────── */
     function appendMessage(data) {
-        var msgs = document.getElementById('messages');
+        const msgs = document.getElementById('messages');
         if (!msgs) return;
 
-        var wrap = document.createElement('div');
+        const wrap = document.createElement('div');
         wrap.className = 'msg';
         wrap.id = 'msg_' + data.id;
 
@@ -49,7 +52,7 @@ var Chat = (function () {
     }
 
     function deleteMessage(id) {
-        var msg = document.getElementById('msg_' + id);
+        const msg = document.getElementById('msg_' + id);
         if (!msg) return;
         msg.style.transition = 'opacity 0.35s, transform 0.35s';
         msg.style.opacity = '0';
@@ -58,9 +61,9 @@ var Chat = (function () {
     }
 
     function appendSystem(text) {
-        var msgs = document.getElementById('messages');
+        const msgs = document.getElementById('messages');
         if (!msgs) return;
-        var div = document.createElement('div');
+        const div = document.createElement('div');
         div.className = 'system-msg';
         div.textContent = text;
         msgs.appendChild(div);
@@ -68,22 +71,29 @@ var Chat = (function () {
     }
 
     function sendMessage() {
-        var input = document.getElementById('message');
+        const input = document.getElementById('message');
         if (!input) return;
-        var msg = input.value.trim();
+        const msg = input.value.trim();
         if (!msg) return;
         socket.emit('send_message', { message: msg });
         input.value = '';
         input.focus();
     }
 
-    /* ── Key bindings ────────────────────────────────────────── */
+    /* ── Key bindings + button listener (fix #17) ────────────── */
     document.addEventListener('DOMContentLoaded', function () {
-        var msgInput = document.getElementById('message');
+
+        const msgInput = document.getElementById('message');
         if (msgInput) {
             msgInput.addEventListener('keypress', function (e) {
                 if (e.key === 'Enter') sendMessage();
             });
+        }
+
+        /* Fix #17: addEventListener replaces inline onclick */
+        const sendBtn = document.getElementById('send-btn');
+        if (sendBtn) {
+            sendBtn.addEventListener('click', sendMessage);
         }
     });
 
@@ -91,7 +101,7 @@ var Chat = (function () {
         appendMessage: appendMessage,
         deleteMessage:  deleteMessage,
         appendSystem:   appendSystem,
-        sendMessage:    sendMessage
+        sendMessage:    sendMessage,
     };
 
 })();
