@@ -103,7 +103,7 @@ const UI = (function () {
         showLoginError('Access Denied: ' + (reason || 'Unauthorized'));
     }
 
-    /* ── User List ───────────────────────────────────────────── */
+    /* ── User List (Change #2: shows IP per user) ────────────── */
     function updateUsers(users) {
         const ul = document.getElementById('users');
         if (!ul) return;
@@ -121,14 +121,20 @@ const UI = (function () {
             empty.style.listStyle = 'none';
             empty.textContent = '— none —';
             ul.appendChild(empty);
-            return;
+        } else {
+            users.forEach(function (user) {
+                const name = typeof user === 'object' ? user.username : user;
+                const ip   = typeof user === 'object' ? user.ip       : '';
+                const li = document.createElement('li');
+                li.innerHTML =
+                    '<span class="user-name">' + escHtml(name) + '</span>' +
+                    (ip ? '<span class="user-ip">' + escHtml(ip) + '</span>' : '');
+                ul.appendChild(li);
+            });
         }
 
-        users.forEach(function (user) {
-            const li = document.createElement('li');
-            li.textContent = user;
-            ul.appendChild(li);
-        });
+        /* Sync admin panel user list if this client is admin */
+        if (_isAdmin) updateAdminUserList(users);
     }
 
     /* ── Utilities ───────────────────────────────────────────── */
@@ -172,6 +178,60 @@ const UI = (function () {
         set('stat-users',      data.users      || 0);
     }
 
+    /* ── Admin Controls ──────────────────────────────────────── */
+    let _isAdmin      = false;
+    let _adminUsername = null;
+
+    function onAdminAssigned(username) {
+        _isAdmin       = true;
+        _adminUsername = username;
+        const btn = document.getElementById('admin-toggle-btn');
+        if (btn) btn.style.display = 'inline-flex';
+        Chat.appendSystem('You are the session admin. ADMIN PANEL available in the top bar.');
+    }
+
+    function updateAdminUserList(users) {
+        const ul = document.getElementById('admin-user-list');
+        if (!ul) return;
+        ul.innerHTML = '';
+        (users || []).forEach(function (user) {
+            const name = typeof user === 'object' ? user.username : user;
+            const ip   = typeof user === 'object' ? user.ip       : '';
+            if (name === _adminUsername) return; // skip self
+            const li = document.createElement('li');
+            li.className = 'admin-user-item';
+            li.innerHTML =
+                '<span class="admin-user-info">' +
+                    '<span class="admin-user-name">' + escHtml(name) + '</span>' +
+                    '<span class="admin-user-ip">'   + escHtml(ip)   + '</span>' +
+                '</span>' +
+                '<span class="admin-user-btns">' +
+                    '<button class="kick-btn"  data-user="' + escHtml(name) + '">KICK</button>' +
+                    '<button class="block-btn" data-user="' + escHtml(name) + '">BLOCK</button>' +
+                '</span>';
+            ul.appendChild(li);
+        });
+        if (!ul.children.length) {
+            ul.innerHTML = '<li class="admin-no-users">No other users connected.</li>';
+        }
+    }
+
+    function showTerminated(reason) {
+        const overlay = document.getElementById('terminated-overlay');
+        const msg     = document.getElementById('terminated-msg');
+        if (msg)     msg.textContent = reason;
+        if (overlay) overlay.classList.add('active');
+    }
+
+    function showSecurityAlert(message) {
+        const banner = document.getElementById('security-alert-banner');
+        const text   = document.getElementById('alert-banner-text');
+        if (!banner || !text) return;
+        text.textContent = message;
+        banner.classList.add('active');
+        setTimeout(function () { banner.classList.remove('active'); }, 8000);
+    }
+
     /* ── Key bindings for login form + button listener (fix #17) */
     document.addEventListener('DOMContentLoaded', function () {
         const usernameInput = document.getElementById('username');
@@ -196,6 +256,55 @@ const UI = (function () {
         if (loginBtn) {
             loginBtn.addEventListener('click', join);
         }
+
+        /* Admin drawer toggle */
+        const toggleBtn = document.getElementById('admin-toggle-btn');
+        const drawer    = document.getElementById('admin-drawer');
+        const closeBtn  = document.getElementById('admin-close-btn');
+        if (toggleBtn && drawer) {
+            toggleBtn.addEventListener('click', function () {
+                drawer.classList.toggle('open');
+            });
+        }
+        if (closeBtn && drawer) {
+            closeBtn.addEventListener('click', function () {
+                drawer.classList.remove('open');
+            });
+        }
+
+        /* Kick / Block delegation on admin user list */
+        const adminList = document.getElementById('admin-user-list');
+        if (adminList) {
+            adminList.addEventListener('click', function (e) {
+                const kickBtn  = e.target.closest('.kick-btn');
+                const blockBtn = e.target.closest('.block-btn');
+                if (kickBtn)  socket.emit('kick_user',  { username: kickBtn.dataset.user });
+                if (blockBtn) socket.emit('block_user', { username: blockBtn.dataset.user });
+            });
+        }
+
+        /* Alert broadcast */
+        const alertBtn   = document.getElementById('alert-btn');
+        const alertInput = document.getElementById('alert-input');
+        if (alertBtn && alertInput) {
+            alertBtn.addEventListener('click', function () {
+                const msg = alertInput.value.trim();
+                if (!msg) return;
+                socket.emit('broadcast_alert', { message: msg });
+                alertInput.value = '';
+            });
+            alertInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') alertBtn.click();
+            });
+        }
+
+        /* Reconnect button on terminated overlay */
+        const reconnectBtn = document.getElementById('reconnect-btn');
+        if (reconnectBtn) {
+            reconnectBtn.addEventListener('click', function () {
+                window.location.reload();
+            });
+        }
     });
 
     /* ── Reset login lock if socket disconnects ───────────────── */
@@ -207,12 +316,15 @@ const UI = (function () {
     });
 
     return {
-        join:        join,
-        onApproved:  onApproved,
-        onRejected:  onRejected,
-        updateUsers: updateUsers,
-        updateStats: updateStats,
-        shakeEl:     shakeEl,
+        join:              join,
+        onApproved:        onApproved,
+        onRejected:        onRejected,
+        updateUsers:       updateUsers,
+        updateStats:       updateStats,
+        onAdminAssigned:   onAdminAssigned,
+        showTerminated:    showTerminated,
+        showSecurityAlert: showSecurityAlert,
+        shakeEl:           shakeEl,
     };
 
 })();

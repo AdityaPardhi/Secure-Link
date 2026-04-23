@@ -80,8 +80,11 @@ logger.info("Waiting for users...\n")
 
 # ─── Rate limiter (fix #7) ────────────────────────────────────
 _last_message_time: dict = {}
-_MESSAGE_COOLDOWN = 0.5   # seconds
-_MAX_MESSAGE_LEN  = 500   # characters (fix #4)
+_MESSAGE_COOLDOWN = 0.5
+_MAX_MESSAGE_LEN  = 500
+
+# Admin session tracking
+_admin_sid: str | None = None
 
 
 # =========================================
@@ -168,13 +171,18 @@ def handle_join(data):
 
     if decision.lower() == "y":
 
-        sessions.add(sid, username)
-
+        sessions.add(sid, username, client_ip)
         emit("approved", room=sid)
 
-        socketio.emit("update_users", sessions.all_usernames())
-        socketio.emit("system_message", f"{username} joined the secure session.")
+        # First approved user becomes admin
+        global _admin_sid
+        if _admin_sid is None:
+            _admin_sid = sid
+            emit("admin_assigned", {"username": username}, room=sid)
+            logger.info("Admin role assigned to: %s", username)
 
+        socketio.emit("update_users", sessions.all_users_info())
+        socketio.emit("system_message", f"{username} joined the secure session.")
         logger.info("%s approved.", username)
 
     else:
@@ -229,6 +237,57 @@ def handle_message(data):
 
 
 # =========================================
+# 🛡️ ADMIN CONTROLS
+# =========================================
+
+@socketio.on("kick_user")
+def handle_kick(data):
+    global _admin_sid
+    if request.sid != _admin_sid:
+        return
+    username   = data.get("username", "").strip()
+    target_sid = sessions.find_sid_by_username(username)
+    if not target_sid or target_sid == _admin_sid:
+        return
+    socketio.emit("kicked", {"reason": "Removed by admin."}, room=target_sid)
+    sessions.remove(target_sid)
+    disconnect(target_sid)
+    socketio.emit("update_users", sessions.all_users_info())
+    socketio.emit("system_message", f"⚠ {username} was kicked by admin.")
+    logger.info("Admin kicked: %s", username)
+
+
+@socketio.on("block_user")
+def handle_block(data):
+    global _admin_sid
+    if request.sid != _admin_sid:
+        return
+    username   = data.get("username", "").strip()
+    target_sid = sessions.find_sid_by_username(username)
+    if not target_sid or target_sid == _admin_sid:
+        return
+    ip = sessions.get_ip(target_sid)
+    security.block_ip(ip)
+    socketio.emit("kicked", {"reason": "Blocked by admin."}, room=target_sid)
+    sessions.remove(target_sid)
+    disconnect(target_sid)
+    socketio.emit("update_users", sessions.all_users_info())
+    socketio.emit("system_message", f"🚫 {username} ({ip}) has been blocked.")
+    logger.info("Admin blocked: %s @ %s", username, ip)
+
+
+@socketio.on("broadcast_alert")
+def handle_alert(data):
+    if request.sid != _admin_sid:
+        return
+    message = data.get("message", "").strip()
+    if not message:
+        return
+    socketio.emit("security_alert", {"message": message})
+    logger.info("Admin broadcast alert: %s", message)
+
+
+# =========================================
 # 🔄 DISCONNECT HANDLER
 # =========================================
 
@@ -242,9 +301,19 @@ def handle_disconnect():
     _last_message_time.pop(sid, None)
 
     if user:
-        socketio.emit("update_users", sessions.all_usernames())
+        socketio.emit("update_users", sessions.all_users_info())
         socketio.emit("system_message", f"{user} left the secure session.")
         logger.info("%s disconnected", user)
+
+    # If admin disconnects, terminate the whole session
+    global _admin_sid
+    if sid == _admin_sid:
+        _admin_sid = None
+        logger.warning("Admin disconnected — session terminated.")
+        socketio.emit("session_terminated", {
+            "reason": "Admin has disconnected. Session terminated."
+        })
+
 
 
 # =========================================

@@ -74,6 +74,14 @@ class SecurityManager:
     def unblock(self, ip: str):
         self._blocked.discard(ip)
 
+    def block_ip(self, ip: str):
+        """Admin controls: directly block an IP address."""
+        if ip:
+            self._blocked.add(ip)
+            self._failed.pop(ip, None)
+            logger.warning("Admin blocked IP: %s", ip)
+
+
 
 # ── Module-level singleton ─────────────────────────────────────
 security = SecurityManager()
