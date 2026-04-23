@@ -86,11 +86,7 @@ socket.on("stats_update", function (data) {
     UI.updateStats(data);
 });
 
-/* ── Admin controls ────────────────────────────────────────── */
-socket.on("admin_assigned", function (data) {
-    UI.onAdminAssigned(data.username);
-});
-
+/* ── Admin controls (events that affect chat users) ─────────── */
 socket.on("kicked", function (data) {
     UI.showTerminated(data.reason || "You have been removed from the session.");
 });
@@ -102,4 +98,5 @@ socket.on("session_terminated", function (data) {
 socket.on("security_alert", function (data) {
     UI.showSecurityAlert(data.message);
 });
+
 

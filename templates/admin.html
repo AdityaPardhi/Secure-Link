@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureLink — Admin Dashboard</title>
+<script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+/* ── Admin page layout ──────────────────────────────────────── */
+html, body { height: 100%; overflow: auto; }
+body { display: block; padding: 0; }
+
+.admin-page-wrap {
+    min-height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 2;
+}
+
+/* Header */
+.adm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 22px;
+    border: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(0,229,160,0.07) 0%, transparent 60%);
+    margin-bottom: 16px;
+}
+.adm-title {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    text-shadow: 0 0 12px rgba(0,229,160,0.4);
+}
+.adm-meta {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+}
+.adm-meta strong { color: var(--accent); }
+.adm-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    display: inline-block;
+    margin-right: 6px;
+}
+.adm-status-dot.online {
+    background: var(--accent);
+    animation: pulse 2.2s ease-in-out infinite;
+}
+
+/* Stats row */
+.adm-stats-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+/* Main grid */
+.adm-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.adm-panel {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    min-height: 280px;
+}
+.adm-panel-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    color: var(--accent);
+    opacity: 0.7;
+    text-transform: uppercase;
+    background: rgba(0,229,160,0.03);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.adm-panel-count {
+    background: rgba(0,229,160,0.15);
+    color: var(--accent);
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 2px;
+}
+.adm-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.adm-panel-body::-webkit-scrollbar { width: 3px; }
+.adm-panel-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* Approval card */
+.approval-card {
+    border: 1px solid var(--border2);
+    background: rgba(0,229,160,0.03);
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    animation: msgIn 0.25s ease both;
+}
+.approval-info { display: flex; flex-direction: column; gap: 3px; }
+.approval-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.approval-ip   { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.approval-time { font-family: var(--font-mono); font-size: 9px; color: var(--muted); opacity: 0.6; }
+.approval-btns { display: flex; gap: 6px; flex-shrink: 0; }
+
+.approve-btn {
+    background: var(--accent); color: var(--bg); border: none;
+    padding: 6px 14px; font-family: var(--font-mono);
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+}
+.reject-btn {
+    background: var(--danger); color: #fff; border: none;
+    padding: 6px 14px; font-family: var(--font-mono);
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+}
+.approve-btn:hover, .reject-btn:hover   { opacity: 0.85; }
+.approve-btn:active,.reject-btn:active  { transform: scale(0.95); }
+
+/* User rows in admin panel */
+.adm-user-row {
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: background 0.2s;
+}
+.adm-user-row:hover { background: rgba(0,229,160,0.04); }
+.adm-user-info { display: flex; flex-direction: column; gap: 2px; }
+.adm-user-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.adm-user-ip   { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.adm-user-btns { display: flex; gap: 5px; }
+
+/* Bottom section */
+.adm-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.adm-alert-section {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.adm-section-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    color: var(--warn);
+    text-transform: uppercase;
+}
+.adm-alert-row { display: flex; gap: 8px; }
+.adm-alert-input {
+    flex: 1;
+    background: rgba(240,165,0,0.05);
+    border: 1px solid rgba(240,165,0,0.3);
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.25s;
+}
+.adm-alert-input:focus { border-color: var(--warn); }
+.adm-alert-input::placeholder { color: var(--muted); }
+.adm-alert-btn {
+    background: var(--warn); color: #000; border: none;
+    padding: 10px 20px; font-family: var(--font-ui);
+    font-size: 12px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; cursor: pointer;
+    white-space: nowrap; transition: opacity 0.2s;
+}
+.adm-alert-btn:hover { opacity: 0.85; }
+
+/* Session log */
+.adm-log-section {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.adm-log-body {
+    height: 120px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.adm-log-body::-webkit-scrollbar { width: 3px; }
+.adm-log-body::-webkit-scrollbar-thumb { background: var(--border); }
+.log-entry {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+}
+.log-entry::before { content: '// '; color: var(--accent); opacity: 0.5; }
+
+/* Empty state */
+.adm-empty {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    padding: 20px 0;
+    opacity: 0.6;
+}
+
+/* Auth overlay */
+#auth-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(8,12,16,0.95); backdrop-filter: blur(8px);
+}
+.auth-box {
+    text-align: center;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 48px 56px;
+    display: flex; flex-direction: column; gap: 20px;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    box-shadow: 0 0 60px rgba(0,229,160,0.1);
+}
+.auth-fail { color: var(--danger); border-color: var(--danger); }
+</style>
+</head>
+<body>
+
+<!-- Auth overlay — shown until admin_auth_ok received -->
+<div id="auth-overlay">
+    <div class="auth-box" id="auth-box">
+        <div class="spinner"></div>
+        <div>AUTHENTICATING ADMIN SESSION...</div>
+    </div>
+</div>
+
+<div class="admin-page-wrap">
+
+    <!-- Header -->
+    <div class="adm-header">
+        <div class="adm-title">⚡ SecureLink — Admin Dashboard</div>
+        <div class="adm-meta">
+            <span>Server: <strong id="adm-server-ip">—</strong></span>
+            <span><span class="adm-status-dot online" id="adm-dot"></span><span id="adm-status">Connected</span></span>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="adm-stats-row">
+        <div class="stat-tile"><div class="stat-label">UPTIME</div><div class="stat-value" id="stat-uptime">00:00:00</div></div>
+        <div class="stat-tile"><div class="stat-label">MESSAGES</div><div class="stat-value" id="stat-messages">0</div></div>
+        <div class="stat-tile"><div class="stat-label">DATA TX</div><div class="stat-value" id="stat-bytes">0 B</div></div>
+        <div class="stat-tile"><div class="stat-label">THROUGHPUT</div><div class="stat-value" id="stat-throughput">0 B/s</div></div>
+        <div class="stat-tile"><div class="stat-label">PACKETS</div><div class="stat-value" id="stat-packets">0</div></div>
+        <div class="stat-tile"><div class="stat-label">CLIENTS</div><div class="stat-value" id="stat-users">0</div></div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="adm-main-grid">
+
+        <!-- Pending Approvals -->
+        <div class="adm-panel">
+            <div class="adm-panel-header">
+                // PENDING APPROVALS
+                <span class="adm-panel-count" id="pending-count">0</span>
+            </div>
+            <div class="adm-panel-body" id="pending-list">
+                <div class="adm-empty" id="pending-empty">No pending requests.</div>
+            </div>
+        </div>
+
+        <!-- Connected Users -->
+        <div class="adm-panel">
+            <div class="adm-panel-header">
+                // CONNECTED USERS
+                <span class="adm-panel-count" id="users-count">0</span>
+            </div>
+            <div class="adm-panel-body" id="users-list">
+                <div class="adm-empty" id="users-empty">No users connected.</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Bottom Row -->
+    <div class="adm-bottom">
+
+        <!-- Security Alert -->
+        <div class="adm-alert-section">
+            <div class="adm-section-label">⚠ Security Alert Broadcast</div>
+            <div class="adm-alert-row">
+                <input id="alert-input" class="adm-alert-input" placeholder="type alert message to broadcast to all users..." autocomplete="off">
+                <button id="alert-btn" class="adm-alert-btn">⚠ Broadcast</button>
+            </div>
+        </div>
+
+        <!-- Session Log -->
+        <div class="adm-log-section">
+            <div class="adm-section-label">// Session Log</div>
+            <div class="adm-log-body" id="session-log"></div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+const ADMIN_TOKEN = "{{ token }}";
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+function esc(str) {
+    return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function setEl(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+}
+function fmtBytes(b) {
+    if (b >= 1048576) return (b/1048576).toFixed(2)+' MB';
+    if (b >= 1024)    return (b/1024).toFixed(1)+' KB';
+    return b+' B';
+}
+function fmtUptime(s) {
+    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), ss=s%60;
+    return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+}
+function addLog(msg) {
+    const log = document.getElementById('session-log');
+    if (!log) return;
+    const d = document.createElement('div');
+    d.className = 'log-entry';
+    d.textContent = msg;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+}
+
+/* ── Pending approvals ───────────────────────────────────────── */
+function addPendingCard(data) {
+    const list = document.getElementById('pending-list');
+    document.getElementById('pending-empty').style.display = 'none';
+    const card = document.createElement('div');
+    card.className = 'approval-card';
+    card.id = 'pending-' + data.sid;
+    card.innerHTML =
+        '<div class="approval-info">' +
+            '<span class="approval-name">' + esc(data.username) + '</span>' +
+            '<span class="approval-ip">' + esc(data.ip) + '</span>' +
+            '<span class="approval-time">' + esc(data.time||'') + '</span>' +
+        '</div>' +
+        '<div class="approval-btns">' +
+            '<button class="approve-btn" data-sid="'+ esc(data.sid) +'" data-approved="true">✔ APPROVE</button>' +
+            '<button class="reject-btn"  data-sid="'+ esc(data.sid) +'" data-approved="false">✖ REJECT</button>' +
+        '</div>';
+    list.appendChild(card);
+    updatePendingCount();
+}
+
+function removePendingCard(sid) {
+    const card = document.getElementById('pending-' + sid);
+    if (card) card.remove();
+    updatePendingCount();
+    if (!document.querySelectorAll('.approval-card').length) {
+        document.getElementById('pending-empty').style.display = '';
+    }
+}
+
+function updatePendingCount() {
+    const n = document.querySelectorAll('.approval-card').length;
+    setEl('pending-count', n);
+}
+
+/* ── Connected users ─────────────────────────────────────────── */
+function updateUsersList(users) {
+    const list = document.getElementById('users-list');
+    list.innerHTML = '';
+    setEl('users-count', users ? users.length : 0);
+    if (!users || !users.length) {
+        list.innerHTML = '<div class="adm-empty">No users connected.</div>';
+        return;
+    }
+    users.forEach(function(u) {
+        const name = typeof u === 'object' ? u.username : u;
+        const ip   = typeof u === 'object' ? u.ip       : '';
+        const row = document.createElement('div');
+        row.className = 'adm-user-row';
+        row.innerHTML =
+            '<div class="adm-user-info">' +
+                '<span class="adm-user-name">' + esc(name) + '</span>' +
+                '<span class="adm-user-ip">'   + esc(ip)   + '</span>' +
+            '</div>' +
+            '<div class="adm-user-btns">' +
+                '<button class="kick-btn"  data-user="'+ esc(name) +'">KICK</button>' +
+                '<button class="block-btn" data-user="'+ esc(name) +'">BLOCK</button>' +
+            '</div>';
+        list.appendChild(row);
+    });
+}
+
+/* ── Socket events ───────────────────────────────────────────── */
+const socket = io();
+
+socket.on('connect', function() {
+    socket.emit('admin_connect', { token: ADMIN_TOKEN });
+});
+
+socket.on('admin_auth_ok', function(data) {
+    document.getElementById('auth-overlay').style.display = 'none';
+    setEl('adm-server-ip', data.server_ip);
+    updateUsersList(data.users || []);
+    (data.pending || []).forEach(addPendingCard);
+    addLog('Admin session authenticated.');
+});
+
+socket.on('admin_auth_failed', function(data) {
+    const box = document.getElementById('auth-box');
+    box.className = 'auth-box auth-fail';
+    box.innerHTML = '<div>❌ AUTH FAILED</div><div>'+ esc(data.reason||'Invalid token') +'</div>';
+});
+
+socket.on('approval_request', function(data) {
+    addPendingCard(data);
+    addLog('Join request: ' + data.username + ' (' + data.ip + ')');
+});
+
+socket.on('approval_resolved', function(data) {
+    removePendingCard(data.sid);
+});
+
+socket.on('update_users', function(users) {
+    updateUsersList(users);
+});
+
+socket.on('stats_update', function(s) {
+    setEl('stat-uptime',     fmtUptime(s.uptime    || 0));
+    setEl('stat-messages',   s.messages  || 0);
+    setEl('stat-bytes',      fmtBytes(s.bytes      || 0));
+    setEl('stat-throughput', (s.throughput||0) + ' B/s');
+    setEl('stat-packets',    s.packets   || 0);
+    setEl('stat-users',      s.users     || 0);
+});
+
+socket.on('system_message', function(msg) {
+    addLog(msg);
+});
+
+socket.on('disconnect', function() {
+    const dot = document.getElementById('adm-dot');
+    if (dot) { dot.classList.remove('online'); }
+    setEl('adm-status', 'Disconnected');
+});
+
+/* ── Button delegation ───────────────────────────────────────── */
+document.addEventListener('click', function(e) {
+    // Approve / Reject
+    const approveBtn = e.target.closest('[data-approved]');
+    if (approveBtn) {
+        socket.emit('admin_decision', {
+            sid:      approveBtn.dataset.sid,
+            approved: approveBtn.dataset.approved === 'true',
+        });
+        return;
+    }
+    // Kick
+    const kickBtn = e.target.closest('.kick-btn');
+    if (kickBtn) { socket.emit('kick_user', { username: kickBtn.dataset.user }); return; }
+    // Block
+    const blockBtn = e.target.closest('.block-btn');
+    if (blockBtn) { socket.emit('block_user', { username: blockBtn.dataset.user }); return; }
+});
+
+/* ── Alert broadcast ─────────────────────────────────────────── */
+document.getElementById('alert-btn').addEventListener('click', function() {
+    const input = document.getElementById('alert-input');
+    const msg   = input.value.trim();
+    if (!msg) return;
+    socket.emit('broadcast_alert', { message: msg });
+    addLog('Alert broadcast: ' + msg);
+    input.value = '';
+});
+document.getElementById('alert-input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') document.getElementById('alert-btn').click();
+});
+</script>
+
+</body>
+</html>

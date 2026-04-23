@@ -130,9 +130,6 @@
 
     <div class="topbar-spacer"></div>
 
-    <!-- Admin toggle — only visible to admin user -->
-    <button id="admin-toggle-btn" class="admin-toggle-btn" style="display:none">⚡ ADMIN</button>
-
     <div class="status-pill" id="conn-status">
 
         <span class="status-dot"></span> Connected
@@ -268,29 +265,6 @@ AWAITING AUTHENTICATION
 
 </div>
 
-
-<!-- ADMIN DRAWER (slide-in panel, admin only) -->
-<div id="admin-drawer" class="admin-drawer">
-
-    <div class="admin-drawer-header">
-        <div class="admin-drawer-title">⚡ ADMIN PANEL</div>
-        <button id="admin-close-btn" class="admin-close-btn">✕</button>
-    </div>
-
-    <div class="admin-section">
-        <div class="admin-section-title">// CONNECTED USERS</div>
-        <ul id="admin-user-list"></ul>
-    </div>
-
-    <div class="admin-divider"></div>
-
-    <div class="admin-section">
-        <div class="admin-section-title">// SECURITY ALERT</div>
-        <input id="alert-input" class="admin-input" placeholder="broadcast alert message..." autocomplete="off">
-        <button id="alert-btn" class="alert-send-btn">⚠ BROADCAST</button>
-    </div>
-
-</div>
 
 <!-- SECURITY ALERT BANNER (shown to all users) -->
 <div id="security-alert-banner" class="security-alert-banner">

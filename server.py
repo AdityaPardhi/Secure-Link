@@ -1,16 +1,11 @@
 """
 SecureLink — server.py
-Flask + SocketIO server for the Secure LAN Communication System.
 
-Fixes applied:
-  #1  — SECRET_KEY generated at startup, not hardcoded
-  #2  — Session password hashed with SHA-256; only hashes compared
-  #4  — 500-character message size limit
-  #5  — Username uniqueness enforced before approval
-  #7  — Per-user 500 ms message rate limit
-  #9  — Reliable LAN IP detection via UDP probe
-  #11 — Dead commented-out code removed
-  #13 — logging used throughout instead of print()
+Two-URL architecture:
+  Users  → http://<LAN_IP>:5000/
+  Admin  → http://<LAN_IP>:5000/admin/<ADMIN_TOKEN>  (printed at startup)
+
+No input() anywhere — admin approves/rejects from the browser dashboard.
 """
 
 import os
@@ -23,49 +18,39 @@ import uuid
 from datetime import datetime
 import socket
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, abort
 from flask_socketio import SocketIO, emit, disconnect
 
 import modules.network_monitor as monitor
-from modules.security       import security
+from modules.security        import security
 from modules.session_manager import sessions
 
-# =========================================
-# 🪵 LOGGING SETUP  (fix #13)
-# =========================================
-
+# ── Logging ───────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# =========================================
-# 🔐 APP + SECRET KEY  (fix #1)
-# =========================================
-
+# ── App ───────────────────────────────────────────────────────
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
-
 socketio = SocketIO(app, async_mode="threading")
 
-# =========================================
-# 🔐 SESSION INITIALIZATION  (fix #2, #9)
-# =========================================
-
+# ── Session setup ─────────────────────────────────────────────
 logger.info("=== SECURE LAN SERVER INITIALIZING ===")
 
 _raw_password = input("Set session access key: ").strip()
-
 if not _raw_password:
     logger.error("Access key cannot be empty. Exiting.")
     raise SystemExit(1)
 
-# Store only the hash — never the plaintext (fix #2)
 SESSION_PASSWORD_HASH = hashlib.sha256(_raw_password.encode()).hexdigest()
-del _raw_password  # remove plaintext from memory immediately
+del _raw_password
 
-# Reliable LAN IP detection (fix #9)
+# Generate admin token and detect LAN IP
+ADMIN_TOKEN = secrets.token_urlsafe(16)
+
 try:
     _s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     _s.connect(("8.8.8.8", 80))
@@ -74,25 +59,23 @@ try:
 except OSError:
     server_ip = socket.gethostbyname(socket.gethostname())
 
-logger.info("Session access key set successfully.")
-logger.info("Server running on: %s", server_ip)
-logger.info("Waiting for users...\n")
+logger.info("Access key set. Server IP: %s", server_ip)
+logger.info("=" * 50)
+logger.info("  USER  URL : http://%s:5000/", server_ip)
+logger.info("  ADMIN URL : http://%s:5000/admin/%s", server_ip, ADMIN_TOKEN)
+logger.info("=" * 50)
 
-# ─── Rate limiter (fix #7) ────────────────────────────────────
-_last_message_time: dict = {}
-_MESSAGE_COOLDOWN = 0.5
-_MAX_MESSAGE_LEN  = 500
+# ── State ─────────────────────────────────────────────────────
+_admin_sid:          str | None  = None
+_pending:            dict        = {}   # sid → {username, ip, time}
+_pending_lock                    = threading.Lock()
+_last_message_time:  dict        = {}
+_MESSAGE_COOLDOWN                = 0.5
+_MAX_MESSAGE_LEN                 = 500
 
-# Admin session tracking
-_admin_sid: str | None = None
 
-
-# =========================================
-# 📊 LIVE STATS BROADCASTER
-# =========================================
-
+# ── Stats broadcaster ─────────────────────────────────────────
 def _broadcast_stats():
-    """Background thread: pushes live network stats to all clients every 2 s."""
     while True:
         time.sleep(2)
         stats = monitor.get_stats()
@@ -103,7 +86,7 @@ threading.Thread(target=_broadcast_stats, daemon=True).start()
 
 
 # =========================================
-# ROUTE
+# ROUTES
 # =========================================
 
 @app.route("/")
@@ -111,111 +94,192 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/admin/<token>")
+def admin_dashboard(token):
+    if token != ADMIN_TOKEN:
+        abort(403)
+    return render_template("admin.html", token=token, server_ip=server_ip)
+
+
 # =========================================
-# 🔐 JOIN HANDLER  (fixes #2, #5)
+# 🔐 JOIN HANDLER
 # =========================================
 
 @socketio.on("join_request")
 def handle_join(data):
-
     username  = data.get("username", "").strip()
     password  = data.get("password", "").strip()
     sid       = request.sid
     client_ip = request.remote_addr
-    current_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
 
-    # ── Blocked IP ────────────────────────────────────────────
     if security.is_blocked(client_ip):
-        emit("rejected", {"reason": "IP blocked due to multiple failed attempts"}, room=sid)
+        emit("rejected", {"reason": "IP blocked due to multiple failed attempts"})
         disconnect(sid)
-        logger.warning("Blocked IP attempted: %s", client_ip)
         return
 
-    # ── IP whitelist ──────────────────────────────────────────
     if not security.is_allowed(client_ip):
-        emit("rejected", {"reason": "IP not authorized"}, room=sid)
+        emit("rejected", {"reason": "IP not authorized"})
         disconnect(sid)
-        logger.warning("Unauthorized IP: %s", client_ip)
         return
 
-    # ── Username required ─────────────────────────────────────
     if not username:
-        emit("rejected", {"reason": "Username required"}, room=sid)
-        disconnect(sid)
+        emit("rejected", {"reason": "Username required"})
         return
 
-    # ── Password check — compare hashes only (fix #2) ─────────
-    incoming_hash = hashlib.sha256(password.encode()).hexdigest()
-    if incoming_hash != SESSION_PASSWORD_HASH:
-
+    if hashlib.sha256(password.encode()).hexdigest() != SESSION_PASSWORD_HASH:
         count = security.record_failure(client_ip)
-
-        logger.warning(
-            "UNAUTHORIZED ACCESS ATTEMPT | user=%s ip=%s time=%s attempt=%d",
-            username, client_ip, current_time, count,
-        )
-
-        emit("rejected", {"reason": "Invalid access key"}, room=sid)
+        logger.warning("Bad password | user=%s ip=%s attempt=%d", username, client_ip, count)
+        emit("rejected", {"reason": "Invalid access key"})
         return
 
-    # Reset failure counter on correct password
     security.clear_failures(client_ip)
 
-    # ── Username uniqueness (fix #5) ──────────────────────────
     if sessions.username_taken(username):
-        emit("rejected", {"reason": "Username already taken"}, room=sid)
+        emit("rejected", {"reason": "Username already taken"})
         return
 
-    logger.info("Join request from: %s | IP: %s", username, client_ip)
-    decision = input("Approve this user? (y/n): ")
+    if _admin_sid is None:
+        emit("rejected", {"reason": "Admin is not connected yet. Try again shortly."})
+        return
 
-    if decision.lower() == "y":
+    # Queue request and notify admin
+    req_time = datetime.now().strftime("%H:%M:%S")
+    with _pending_lock:
+        _pending[sid] = {"username": username, "ip": client_ip, "time": req_time}
 
-        sessions.add(sid, username, client_ip)
-        emit("approved", room=sid)
-
-        # First approved user becomes admin
-        global _admin_sid
-        if _admin_sid is None:
-            _admin_sid = sid
-            emit("admin_assigned", {"username": username}, room=sid)
-            logger.info("Admin role assigned to: %s", username)
-
-        socketio.emit("update_users", sessions.all_users_info())
-        socketio.emit("system_message", f"{username} joined the secure session.")
-        logger.info("%s approved.", username)
-
-    else:
-
-        emit("rejected", {"reason": "Admin rejected"}, room=sid)
-        disconnect(sid)
-
-        logger.info("%s rejected.", username)
+    emit("pending")
+    socketio.emit("approval_request", {
+        "sid": sid, "username": username, "ip": client_ip, "time": req_time
+    }, room=_admin_sid)
+    logger.info("Join request queued: %s @ %s", username, client_ip)
 
 
 # =========================================
-# 💬 MESSAGE HANDLER  (fixes #4, #7)
+# 🔐 ADMIN AUTHENTICATION
+# =========================================
+
+@socketio.on("admin_connect")
+def handle_admin_connect(data):
+    global _admin_sid
+    if data.get("token") != ADMIN_TOKEN:
+        emit("admin_auth_failed", {"reason": "Invalid admin token."})
+        return
+
+    _admin_sid = request.sid
+    logger.info("Admin dashboard connected (sid=%s)", request.sid)
+
+    with _pending_lock:
+        pending_list = [
+            {"sid": s, **v} for s, v in _pending.items()
+        ]
+
+    emit("admin_auth_ok", {
+        "server_ip": server_ip,
+        "users":     sessions.all_users_info(),
+        "pending":   pending_list,
+    })
+
+
+# =========================================
+# ✅ ADMIN DECISION
+# =========================================
+
+@socketio.on("admin_decision")
+def handle_admin_decision(data):
+    if request.sid != _admin_sid:
+        return
+
+    target_sid = data.get("sid", "")
+    approved   = bool(data.get("approved", False))
+
+    with _pending_lock:
+        pending_data = _pending.pop(target_sid, None)
+
+    if not pending_data:
+        return
+
+    username  = pending_data["username"]
+    client_ip = pending_data["ip"]
+
+    if approved:
+        sessions.add(target_sid, username, client_ip)
+        socketio.emit("approved",      room=target_sid)
+        socketio.emit("update_users",  sessions.all_users_info())
+        socketio.emit("system_message", f"{username} joined the secure session.")
+        logger.info("Admin approved: %s", username)
+    else:
+        socketio.emit("rejected", {"reason": "Admin rejected your request."}, room=target_sid)
+        disconnect(target_sid)
+        logger.info("Admin rejected: %s", username)
+
+    socketio.emit("approval_resolved", {"sid": target_sid}, room=_admin_sid)
+
+
+# =========================================
+# 🛡️ ADMIN KICK / BLOCK / ALERT
+# =========================================
+
+@socketio.on("kick_user")
+def handle_kick(data):
+    if request.sid != _admin_sid:
+        return
+    username   = data.get("username", "").strip()
+    target_sid = sessions.find_sid_by_username(username)
+    if not target_sid:
+        return
+    socketio.emit("kicked",         {"reason": "Removed by admin."},  room=target_sid)
+    sessions.remove(target_sid)
+    disconnect(target_sid)
+    socketio.emit("update_users",   sessions.all_users_info())
+    socketio.emit("system_message", f"⚠ {username} was kicked by admin.")
+    logger.info("Kicked: %s", username)
+
+
+@socketio.on("block_user")
+def handle_block(data):
+    if request.sid != _admin_sid:
+        return
+    username   = data.get("username", "").strip()
+    target_sid = sessions.find_sid_by_username(username)
+    if not target_sid:
+        return
+    ip = sessions.get_ip(target_sid)
+    security.block_ip(ip)
+    socketio.emit("kicked",         {"reason": "Blocked by admin."},  room=target_sid)
+    sessions.remove(target_sid)
+    disconnect(target_sid)
+    socketio.emit("update_users",   sessions.all_users_info())
+    socketio.emit("system_message", f"🚫 {username} ({ip}) blocked.")
+    logger.info("Blocked: %s @ %s", username, ip)
+
+
+@socketio.on("broadcast_alert")
+def handle_alert(data):
+    if request.sid != _admin_sid:
+        return
+    message = data.get("message", "").strip()
+    if message:
+        socketio.emit("security_alert", {"message": message})
+        logger.info("Alert broadcast: %s", message)
+
+
+# =========================================
+# 💬 MESSAGE HANDLER
 # =========================================
 
 @socketio.on("send_message")
 def handle_message(data):
-
     sid = request.sid
-
-    # ── Rate limit (fix #7) ───────────────────────────────────
     now = time.time()
     if now - _last_message_time.get(sid, 0) < _MESSAGE_COOLDOWN:
         return
     _last_message_time[sid] = now
 
     message = data.get("message", "").strip()
-
     if not message:
         return
-
-    # ── Size limit (fix #4) ───────────────────────────────────
     if len(message) > _MAX_MESSAGE_LEN:
-        emit("error", {"reason": f"Message exceeds {_MAX_MESSAGE_LEN} character limit."})
+        emit("error", {"reason": f"Message exceeds {_MAX_MESSAGE_LEN} characters."})
         return
 
     username  = sessions.get_username(sid) or "Unknown"
@@ -228,63 +292,11 @@ def handle_message(data):
         "id":       msg_id,
     })
 
-    # ⏳ Auto-delete after 10 seconds
-    def delete_message(mid):
+    def delete_later(mid):
         time.sleep(10)
         socketio.emit("delete_message", mid)
 
-    threading.Thread(target=delete_message, args=(msg_id,), daemon=True).start()
-
-
-# =========================================
-# 🛡️ ADMIN CONTROLS
-# =========================================
-
-@socketio.on("kick_user")
-def handle_kick(data):
-    global _admin_sid
-    if request.sid != _admin_sid:
-        return
-    username   = data.get("username", "").strip()
-    target_sid = sessions.find_sid_by_username(username)
-    if not target_sid or target_sid == _admin_sid:
-        return
-    socketio.emit("kicked", {"reason": "Removed by admin."}, room=target_sid)
-    sessions.remove(target_sid)
-    disconnect(target_sid)
-    socketio.emit("update_users", sessions.all_users_info())
-    socketio.emit("system_message", f"⚠ {username} was kicked by admin.")
-    logger.info("Admin kicked: %s", username)
-
-
-@socketio.on("block_user")
-def handle_block(data):
-    global _admin_sid
-    if request.sid != _admin_sid:
-        return
-    username   = data.get("username", "").strip()
-    target_sid = sessions.find_sid_by_username(username)
-    if not target_sid or target_sid == _admin_sid:
-        return
-    ip = sessions.get_ip(target_sid)
-    security.block_ip(ip)
-    socketio.emit("kicked", {"reason": "Blocked by admin."}, room=target_sid)
-    sessions.remove(target_sid)
-    disconnect(target_sid)
-    socketio.emit("update_users", sessions.all_users_info())
-    socketio.emit("system_message", f"🚫 {username} ({ip}) has been blocked.")
-    logger.info("Admin blocked: %s @ %s", username, ip)
-
-
-@socketio.on("broadcast_alert")
-def handle_alert(data):
-    if request.sid != _admin_sid:
-        return
-    message = data.get("message", "").strip()
-    if not message:
-        return
-    socketio.emit("security_alert", {"message": message})
-    logger.info("Admin broadcast alert: %s", message)
+    threading.Thread(target=delete_later, args=(msg_id,), daemon=True).start()
 
 
 # =========================================
@@ -293,20 +305,19 @@ def handle_alert(data):
 
 @socketio.on("disconnect")
 def handle_disconnect():
-
+    global _admin_sid
     sid  = request.sid
     user = sessions.remove(sid)
-
-    # Clean up rate-limiter entry
     _last_message_time.pop(sid, None)
 
+    with _pending_lock:
+        _pending.pop(sid, None)
+
     if user:
-        socketio.emit("update_users", sessions.all_users_info())
+        socketio.emit("update_users",   sessions.all_users_info())
         socketio.emit("system_message", f"{user} left the secure session.")
         logger.info("%s disconnected", user)
 
-    # If admin disconnects, terminate the whole session
-    global _admin_sid
     if sid == _admin_sid:
         _admin_sid = None
         logger.warning("Admin disconnected — session terminated.")
@@ -315,14 +326,13 @@ def handle_disconnect():
         })
 
 
-
 # =========================================
-# 🚀 START SERVER
+# 🚀 START
 # =========================================
 
 if __name__ == "__main__":
-
     try:
         socketio.run(app, host="0.0.0.0", port=5000)
     finally:
         monitor.generate_report(server_ip)
+        security.save()

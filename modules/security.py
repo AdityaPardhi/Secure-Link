@@ -81,7 +81,10 @@ class SecurityManager:
             self._failed.pop(ip, None)
             logger.warning("Admin blocked IP: %s", ip)
 
+    def save(self):
+        """Placeholder — extend to persist blocked IPs across restarts if needed."""
+        logger.info("Blocked IPs at shutdown: %s", self._blocked)
 
 
 # ── Module-level singleton ─────────────────────────────────────
-security = SecurityManager()
+security = SecurityManager()
