@@ -143,6 +143,35 @@ const UI = (function () {
         });
     }
 
+    /* ── Live Stats Panel (Change #1) ───────────────────────── */
+    function fmtBytes(b) {
+        if (b >= 1048576) return (b / 1048576).toFixed(2) + ' MB';
+        if (b >= 1024)    return (b / 1024).toFixed(1)    + ' KB';
+        return b + ' B';
+    }
+
+    function fmtUptime(secs) {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = secs % 60;
+        return String(h).padStart(2,'0') + ':' +
+               String(m).padStart(2,'0') + ':' +
+               String(s).padStart(2,'0');
+    }
+
+    function updateStats(data) {
+        const set = function (id, val) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        set('stat-uptime',     fmtUptime(data.uptime   || 0));
+        set('stat-messages',   data.messages  || 0);
+        set('stat-bytes',      fmtBytes(data.bytes     || 0));
+        set('stat-throughput', (data.throughput || 0) + ' B/s');
+        set('stat-packets',    data.packets    || 0);
+        set('stat-users',      data.users      || 0);
+    }
+
     /* ── Key bindings for login form + button listener (fix #17) */
     document.addEventListener('DOMContentLoaded', function () {
         const usernameInput = document.getElementById('username');
@@ -182,6 +211,7 @@ const UI = (function () {
         onApproved:  onApproved,
         onRejected:  onRejected,
         updateUsers: updateUsers,
+        updateStats: updateStats,
         shakeEl:     shakeEl,
     };
 

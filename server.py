@@ -85,6 +85,21 @@ _MAX_MESSAGE_LEN  = 500   # characters (fix #4)
 
 
 # =========================================
+# 📊 LIVE STATS BROADCASTER
+# =========================================
+
+def _broadcast_stats():
+    """Background thread: pushes live network stats to all clients every 2 s."""
+    while True:
+        time.sleep(2)
+        stats = monitor.get_stats()
+        stats["users"] = sessions.count()
+        socketio.emit("stats_update", stats)
+
+threading.Thread(target=_broadcast_stats, daemon=True).start()
+
+
+# =========================================
 # ROUTE
 # =========================================
 

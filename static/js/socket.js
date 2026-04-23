@@ -80,3 +80,8 @@ socket.on("update_users", function (users) {
     console.log("User list updated:", users);
     UI.updateUsers(users);
 });
+
+/* ── Live stats (Change #1) ────────────────────────────────── */
+socket.on("stats_update", function (data) {
+    UI.updateStats(data);
+});

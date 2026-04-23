@@ -41,6 +41,21 @@ def increment_stats(byte_count: int) -> int:
         return _packet_counter
 
 
+def get_stats() -> dict:
+    """Return a live snapshot of all network stats (thread-safe)."""
+    with _lock:
+        elapsed    = time.time() - _session_start
+        throughput = _total_bytes / elapsed if elapsed > 0 else 0
+        return {
+            "messages":   _total_messages,
+            "bytes":      _total_bytes,
+            "packets":    _packet_counter,
+            "uptime":     int(elapsed),        # seconds
+            "throughput": round(throughput, 2), # bytes/sec
+        }
+
+
+
 def generate_report(server_ip: str):
     """Print and save the end-of-session network report (fix #13)."""
     with _lock:

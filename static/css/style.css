@@ -947,4 +947,62 @@ body::after {
     font-size: 12px;
     letter-spacing: 0.5px;
     animation: msgIn 0.25s ease both;
-}
+}
+
+/* ── Live Network Stats Panel (Change #1) ────────────────────── */
+.stats-panel {
+    border-top: 1px solid var(--border);
+    padding: 12px 14px 16px;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.stats-heading {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    color: var(--accent);
+    opacity: 0.6;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.stat-tile {
+    background: rgba(0, 229, 160, 0.04);
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: border-color 0.25s, background 0.25s;
+}
+
+.stat-tile:hover {
+    border-color: var(--border2);
+    background: rgba(0, 229, 160, 0.07);
+}
+
+.stat-label {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+.stat-value {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px rgba(0, 229, 160, 0.3);
+    transition: color 0.3s;
+}
+
