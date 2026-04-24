@@ -49,8 +49,9 @@ if not _raw_password:
 SESSION_PASSWORD_HASH = hashlib.sha256(_raw_password.encode()).hexdigest()
 del _raw_password
 
-# Generate admin token and detect LAN IP
+# Generate admin token, AES session key, and detect LAN IP
 ADMIN_TOKEN = secrets.token_urlsafe(16)
+AES_KEY     = secrets.token_hex(32)          # 256-bit key, distributed to approved users
 
 try:
     _s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -72,7 +73,8 @@ _pending:            dict        = {}   # sid → {username, ip, time}
 _pending_lock                    = threading.Lock()
 _last_message_time:  dict        = {}
 _MESSAGE_COOLDOWN                = 0.5
-_MAX_MESSAGE_LEN                 = 500
+_MAX_MESSAGE_LEN  = 500     # plaintext character limit (enforced client-side before encrypt)
+_MAX_CIPHERTEXT_LEN = 1500  # server-side limit for AES-GCM ciphertext (base64)
 
 # Network simulation
 _packet_delay_ms:    int         = 0    # 0–2000 ms added before each broadcast
@@ -225,7 +227,7 @@ def handle_admin_decision(data):
 
     if approved:
         sessions.add(target_sid, username, client_ip)
-        socketio.emit("approved",      room=target_sid)
+        socketio.emit("approved", {"key": AES_KEY}, room=target_sid)
         socketio.emit("update_users",  sessions.all_users_info())
         socketio.emit("system_message", f"{username} joined the secure session.")
         logger.info("Admin approved: %s", username)
@@ -333,10 +335,12 @@ def handle_message(data):
     packet_id = monitor.increment_stats(len(message.encode()))
     msg_id    = str(uuid.uuid4())
 
+    # Relay ciphertext — server never decrypts (Change #9)
     socketio.emit("receive_message", {
-        "username": username,
-        "message":  f"[Packet {packet_id}] {message}",
-        "id":       msg_id,
+        "username":  username,
+        "message":   message,       # AES-256-GCM ciphertext (base64)
+        "packet_id": packet_id,     # separated so client can label after decryption
+        "id":        msg_id,
     })
 
     def delete_later(mid):

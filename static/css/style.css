@@ -1205,4 +1205,17 @@ body::after {
 }
 .reconnect-btn:hover  { opacity: 0.85; }
 .reconnect-btn:active { transform: scale(0.97); }
+
+/* ── AES Encryption UI (Change #9) ─────────────────────────── */
+.msg-decrypting {
+    color: var(--muted) !important;
+    font-style: italic;
+    animation: pulse 1.2s ease-in-out infinite;
+}
+.msg-enc-badge {
+    font-size: 10px;
+    opacity: 0.5;
+    margin-left: 6px;
+    vertical-align: middle;
+}
 

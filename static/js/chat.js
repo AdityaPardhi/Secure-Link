@@ -4,6 +4,7 @@
 
    Fix #17: send-btn wired via addEventListener (onclick removed from HTML)
    Fix #19: var → const/let throughout
+   Change #9: sendMessage encrypts before emit; appendMessage decrypts on receipt
    ============================================================ */
 
 const Chat = (function () {
@@ -32,6 +33,12 @@ const Chat = (function () {
     }
 
     /* ── Public API ──────────────────────────────────────────── */
+
+    /**
+     * appendMessage — Change #9:
+     * data.message is ciphertext (base64). Decrypts asynchronously,
+     * shows "decrypting…" placeholder until ready.
+     */
     function appendMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
@@ -40,15 +47,37 @@ const Chat = (function () {
         wrap.className = 'msg';
         wrap.id = 'msg_' + data.id;
 
+        /* Header always rendered immediately */
         wrap.innerHTML =
             '<div class="msg-header">' +
                 '<span class="msg-user">' + escHtml(data.username) + '</span>' +
                 '<span class="msg-time">' + timestamp() + '</span>' +
+                '<span class="msg-enc-badge" title="AES-256-GCM encrypted">🔐</span>' +
             '</div>' +
-            '<div class="msg-text">' + escHtml(data.message) + '</div>';
+            '<div class="msg-text msg-decrypting">// decrypting…</div>';
 
         msgs.appendChild(wrap);
         scrollBottom();
+
+        const textEl = wrap.querySelector('.msg-text');
+
+        if (SecureCrypto.isReady()) {
+            SecureCrypto.decrypt(data.message)
+                .then(function (plaintext) {
+                    const label = data.packet_id ? '[Packet ' + data.packet_id + '] ' : '';
+                    textEl.textContent = label + plaintext;
+                    textEl.classList.remove('msg-decrypting');
+                })
+                .catch(function () {
+                    textEl.textContent = '[⚠ Could not decrypt message]';
+                    textEl.classList.remove('msg-decrypting');
+                    textEl.style.color = 'var(--danger)';
+                });
+        } else {
+            /* Crypto not ready — show raw (should not happen normally) */
+            textEl.textContent = '[Encrypted] ' + data.message.substring(0, 40) + '…';
+            textEl.classList.remove('msg-decrypting');
+        }
     }
 
     function deleteMessage(id) {
@@ -70,14 +99,39 @@ const Chat = (function () {
         scrollBottom();
     }
 
+    /**
+     * sendMessage — Change #9:
+     * Validates plaintext length, then encrypts before emitting.
+     * Input is cleared immediately for UX; emit happens after encrypt resolves.
+     */
     function sendMessage() {
         const input = document.getElementById('message');
         if (!input) return;
         const msg = input.value.trim();
         if (!msg) return;
-        socket.emit('send_message', { message: msg });
+
+        if (msg.length > 500) {
+            appendSystem('⚠ Message too long (max 500 characters).');
+            return;
+        }
+
+        if (!SecureCrypto.isReady()) {
+            appendSystem('⚠ Encryption not ready. Message not sent.');
+            return;
+        }
+
+        /* Clear input immediately for a snappy UX */
         input.value = '';
         input.focus();
+
+        SecureCrypto.encrypt(msg)
+            .then(function (ciphertext) {
+                socket.emit('send_message', { message: ciphertext });
+            })
+            .catch(function (err) {
+                console.error('[SecureCrypto] Encryption failed:', err);
+                appendSystem('⚠ Encryption failed. Message not sent.');
+            });
     }
 
     /* ── Key bindings + button listener (fix #17) ────────────── */

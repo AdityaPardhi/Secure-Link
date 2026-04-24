@@ -53,9 +53,18 @@ socket.on("reconnect", function (attempt) {
 });
 
 /* ── Auth events ───────────────────────────────────────────── */
-socket.on("approved", function () {
-    UI.onApproved();
+socket.on("approved", function (data) {
+    /* Change #9: server sends AES key on approval */
+    if (data && data.key) {
+        SecureCrypto.init(data.key).then(function () {
+            Chat.appendSystem("🔐 AES-256-GCM encryption active. Messages are end-to-end encrypted.");
+            UI.onApproved();
+        });
+    } else {
+        UI.onApproved();
+    }
 });
+
 
 socket.on("rejected", function (data) {
     UI.onRejected(data.reason);
