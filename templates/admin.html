@@ -311,6 +311,48 @@ body { display: block; padding: 0; }
     border-radius: 2px;
 }
 
+/* Network Simulation Section */
+.adm-netsim-section {
+    border: 1px solid rgba(0,180,255,0.25);
+    background: rgba(0,180,255,0.03);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.sim-label { color: #00b4ff; }
+.sim-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.sim-row  { display: flex; flex-direction: column; gap: 6px; }
+.sim-row-label {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--muted); display: flex; justify-content: space-between;
+}
+.sim-row-label span { color: #00b4ff; font-weight: 700; }
+input[type="range"] {
+    -webkit-appearance: none; width: 100%; height: 4px;
+    background: var(--border2); outline: none; border-radius: 2px; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: #00b4ff; cursor: pointer;
+    box-shadow: 0 0 8px rgba(0,180,255,0.5);
+}
+.sim-apply-btn {
+    background: #00b4ff; color: #000; border: none;
+    padding: 8px 22px; font-family: var(--font-ui);
+    font-size: 12px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; cursor: pointer; align-self: flex-start;
+    transition: opacity 0.2s;
+}
+.sim-apply-btn:hover { opacity: 0.85; }
+.sim-active-badge {
+    font-family: var(--font-mono); font-size: 10px;
+    padding: 2px 8px; background: rgba(0,180,255,0.1);
+    color: #00b4ff; border-radius: 2px; transition: background 0.3s;
+}
+.sim-active-badge.active { background: rgba(0,180,255,0.25); }
+
 /* Auth overlay */
 #auth-overlay {
     position: fixed; inset: 0; z-index: 100;
@@ -400,6 +442,25 @@ body { display: block; padding: 0; }
         <div class="adm-intrusion-body" id="intrusion-log">
             <div class="adm-empty" id="intrusion-empty">No intrusion attempts detected.</div>
         </div>
+    </div>
+
+    <!-- Network Simulation (#7, #8) -->
+    <div class="adm-netsim-section">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="adm-section-label sim-label">🌐 Network Simulation</div>
+            <span class="sim-active-badge" id="sim-status">OFF</span>
+        </div>
+        <div class="sim-rows">
+            <div class="sim-row">
+                <div class="sim-row-label">Packet Delay <span id="delay-val">0</span> ms</div>
+                <input type="range" id="sim-delay" min="0" max="2000" step="50" value="0">
+            </div>
+            <div class="sim-row">
+                <div class="sim-row-label">Packet Loss <span id="loss-val">0</span> %</div>
+                <input type="range" id="sim-loss" min="0" max="100" step="5" value="0">
+            </div>
+        </div>
+        <button class="sim-apply-btn" id="sim-apply">▶ APPLY</button>
     </div>
 
     <!-- Bottom Row -->
@@ -636,6 +697,36 @@ document.getElementById('alert-btn').addEventListener('click', function() {
 });
 document.getElementById('alert-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') document.getElementById('alert-btn').click();
+});
+
+/* ── Network Simulation (#7, #8) ────────────────────────────── */
+document.getElementById('sim-delay').addEventListener('input', function() {
+    document.getElementById('delay-val').textContent = this.value;
+});
+document.getElementById('sim-loss').addEventListener('input', function() {
+    document.getElementById('loss-val').textContent = this.value;
+});
+document.getElementById('sim-apply').addEventListener('click', function() {
+    const delay = parseInt(document.getElementById('sim-delay').value);
+    const loss  = parseInt(document.getElementById('sim-loss').value);
+    socket.emit('set_network_sim', { delay: delay, loss: loss });
+});
+
+socket.on('network_sim_update', function(data) {
+    document.getElementById('sim-delay').value = data.delay;
+    document.getElementById('delay-val').textContent = data.delay;
+    document.getElementById('sim-loss').value  = data.loss;
+    document.getElementById('loss-val').textContent  = data.loss;
+
+    const badge = document.getElementById('sim-status');
+    const active = data.delay > 0 || data.loss > 0;
+    if (badge) {
+        badge.textContent = active
+            ? 'ACTIVE — ' + data.delay + 'ms / ' + data.loss + '% loss'
+            : 'OFF';
+        badge.classList.toggle('active', active);
+    }
+    addLog('Network sim: delay=' + data.delay + 'ms  loss=' + data.loss + '%');
 });
 </script>
 

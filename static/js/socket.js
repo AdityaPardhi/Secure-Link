@@ -99,4 +99,8 @@ socket.on("security_alert", function (data) {
     UI.showSecurityAlert(data.message);
 });
 
+/* ── Network simulation feedback (#7, #8) ──────────────────── */
+socket.on("packet_lost", function (data) {
+    Chat.appendSystem("⚠ Your packet was dropped (simulated " + data.pct + "% loss rate).");
+});
 

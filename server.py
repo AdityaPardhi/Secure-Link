@@ -15,6 +15,7 @@ import logging
 import threading
 import time
 import uuid
+import random
 from datetime import datetime
 import socket
 
@@ -72,6 +73,10 @@ _pending_lock                    = threading.Lock()
 _last_message_time:  dict        = {}
 _MESSAGE_COOLDOWN                = 0.5
 _MAX_MESSAGE_LEN                 = 500
+
+# Network simulation
+_packet_delay_ms:    int         = 0    # 0–2000 ms added before each broadcast
+_packet_loss_pct:    int         = 0    # 0–100 % chance to drop a packet
 
 
 # ── Stats broadcaster ─────────────────────────────────────────
@@ -280,6 +285,21 @@ def handle_alert(data):
         logger.info("Alert broadcast: %s", message)
 
 
+@socketio.on("set_network_sim")
+def handle_network_sim(data):
+    """Admin sets packet delay and loss simulation values."""
+    global _packet_delay_ms, _packet_loss_pct
+    if request.sid != _admin_sid:
+        return
+    _packet_delay_ms = max(0, min(2000, int(data.get("delay", 0))))
+    _packet_loss_pct = max(0,  min(100, int(data.get("loss",  0))))
+    logger.info("Network sim updated: delay=%dms loss=%d%%", _packet_delay_ms, _packet_loss_pct)
+    socketio.emit("network_sim_update", {
+        "delay": _packet_delay_ms,
+        "loss":  _packet_loss_pct,
+    })
+
+
 # =========================================
 # 💬 MESSAGE HANDLER
 # =========================================
@@ -298,6 +318,16 @@ def handle_message(data):
     if len(message) > _MAX_MESSAGE_LEN:
         emit("error", {"reason": f"Message exceeds {_MAX_MESSAGE_LEN} characters."})
         return
+
+    # Packet loss simulation (#8)
+    if _packet_loss_pct > 0 and random.random() < (_packet_loss_pct / 100.0):
+        emit("packet_lost", {"pct": _packet_loss_pct})
+        logger.info("Packet dropped (loss=%d%%)", _packet_loss_pct)
+        return
+
+    # Packet delay simulation (#7)
+    if _packet_delay_ms > 0:
+        time.sleep(_packet_delay_ms / 1000.0)
 
     username  = sessions.get_username(sid) or "Unknown"
     packet_id = monitor.increment_stats(len(message.encode()))
