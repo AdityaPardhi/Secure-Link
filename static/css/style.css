@@ -1218,4 +1218,28 @@ body::after {
     margin-left: 6px;
     vertical-align: middle;
 }
+
+/* ── Private Messaging (Change #11) ─────────────────────────── */
+.msg-private {
+    border-left: 3px solid #9d5cff;
+    background: rgba(157, 92, 255, 0.05);
+}
+.dm-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    background: rgba(157, 92, 255, 0.2);
+    color: #9d5cff;
+    padding: 2px 7px;
+    border-radius: 2px;
+    margin-right: 8px;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+}
+
+/* Sidebar username click hint */
+#users li:hover .user-name {
+    color: #9d5cff;
+    transition: color 0.15s;
+}
+
 

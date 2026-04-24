@@ -43,6 +43,9 @@ const UI = (function () {
 
         loginInProgress = true;
 
+        /* Change #11: store current username for DM direction labels */
+        Chat.setUsername(username);
+
         const pending = document.getElementById('pending-overlay');
         if (pending) pending.classList.add('active');
 
@@ -126,9 +129,21 @@ const UI = (function () {
                 const name = typeof user === 'object' ? user.username : user;
                 const ip   = typeof user === 'object' ? user.ip       : '';
                 const li = document.createElement('li');
+                li.title  = 'Click to send a private message';
+                li.style.cursor = 'pointer';
                 li.innerHTML =
                     '<span class="user-name">' + escHtml(name) + '</span>' +
                     (ip ? '<span class="user-ip">' + escHtml(ip) + '</span>' : '');
+
+                /* Change #11: click to pre-fill /dm command */
+                li.addEventListener('click', function () {
+                    const input = document.getElementById('message');
+                    if (input) {
+                        input.value = '/dm ' + name + ' ';
+                        input.focus();
+                    }
+                });
+
                 ul.appendChild(li);
             });
         }

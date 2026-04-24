@@ -287,6 +287,67 @@ def handle_alert(data):
         logger.info("Alert broadcast: %s", message)
 
 
+# =========================================
+# 🔒 PRIVATE MESSAGE HANDLER
+# =========================================
+
+@socketio.on("private_message")
+def handle_private_message(data):
+    sid = request.sid
+    now = time.time()
+    if now - _last_message_time.get(sid, 0) < _MESSAGE_COOLDOWN:
+        return
+    _last_message_time[sid] = now
+
+    recipient = data.get("to", "").strip()
+    message   = data.get("message", "").strip()
+
+    if not message or len(message) > _MAX_CIPHERTEXT_LEN:
+        return
+
+    sender = sessions.get_username(sid)
+    if not sender:
+        return
+
+    target_sid = sessions.find_sid_by_username(recipient)
+    if not target_sid:
+        emit("error", {"reason": f"User '{recipient}' not found or offline."})
+        return
+
+    # Packet loss simulation
+    if _packet_loss_pct > 0 and random.random() < (_packet_loss_pct / 100.0):
+        emit("packet_lost", {"pct": _packet_loss_pct})
+        return
+
+    # Packet delay simulation
+    if _packet_delay_ms > 0:
+        time.sleep(_packet_delay_ms / 1000.0)
+
+    packet_id = monitor.increment_stats(len(message.encode()))
+    msg_id    = str(uuid.uuid4())
+
+    dm_payload = {
+        "from":      sender,
+        "to":        recipient,
+        "message":   message,      # AES-256-GCM ciphertext
+        "packet_id": packet_id,
+        "id":        msg_id,
+    }
+
+    # Deliver only to recipient and echo back to sender
+    socketio.emit("receive_private_message", dm_payload, room=target_sid)
+    socketio.emit("receive_private_message", dm_payload, room=sid)
+    logger.info("DM: %s → %s [Packet %d]", sender, recipient, packet_id)
+
+    def delete_later(mid):
+        time.sleep(10)
+        socketio.emit("delete_message", mid)
+
+    threading.Thread(target=delete_later, args=(msg_id,), daemon=True).start()
+
+
+
+
 @socketio.on("set_network_sim")
 def handle_network_sim(data):
     """Admin sets packet delay and loss simulation values."""

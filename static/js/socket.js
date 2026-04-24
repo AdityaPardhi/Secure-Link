@@ -81,6 +81,13 @@ socket.on("delete_message", function (id) {
     Chat.deleteMessage(id);
 });
 
+/* ── Private messaging (#11) ───────────────────────────────── */
+socket.on("receive_private_message", function (data) {
+    Chat.appendPrivateMessage(data);
+});
+
+
+
 socket.on("system_message", function (msg) {
     Chat.appendSystem(msg);
 });
