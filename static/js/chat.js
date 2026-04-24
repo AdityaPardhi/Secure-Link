@@ -4,13 +4,14 @@
 
    Fix #17: send-btn wired via addEventListener (onclick removed from HTML)
    Fix #19: var → const/let throughout
-   Change #9: sendMessage encrypts before emit; appendMessage decrypts on receipt
-   Change #11: /dm command and appendPrivateMessage for direct messaging
+   Change #9:  sendMessage encrypts; appendMessage decrypts
+   Change #11: /dm command and appendPrivateMessage
+   Change #13: file transfer via send_file / receive_file
    ============================================================ */
 
 const Chat = (function () {
 
-    let _currentUsername = null;  // set on join
+    let _currentUsername = null;  // set on join (Change #11)
 
     /* ── Helpers ─────────────────────────────────────────────── */
     function escHtml(str) {
@@ -35,14 +36,27 @@ const Chat = (function () {
         if (msgs) msgs.scrollTop = msgs.scrollHeight;
     }
 
+    function formatBytes(n) {
+        if (n < 1024)      return n + ' B';
+        if (n < 1048576)   return (n / 1024).toFixed(1) + ' KB';
+        return (n / 1048576).toFixed(1) + ' MB';
+    }
+
+    function getFileIcon(type) {
+        if (!type) return '📄';
+        if (type.startsWith('image/'))       return '🖼';
+        if (type === 'application/pdf')      return '📕';
+        if (type.includes('zip'))            return '🗜';
+        if (type.includes('spreadsheet') || type.includes('csv')) return '📊';
+        if (type.includes('word') || type.includes('document'))   return '📝';
+        return '📄';
+    }
+
     /* ── Public API ──────────────────────────────────────────── */
 
     function setUsername(name) { _currentUsername = name; }
 
-    /**
-     * appendMessage — Change #9:
-     * data.message is ciphertext. Decrypts async, shows placeholder first.
-     */
+    /* appendMessage — Change #9 */
     function appendMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
@@ -55,7 +69,7 @@ const Chat = (function () {
             '<div class="msg-header">' +
                 '<span class="msg-user">' + escHtml(data.username) + '</span>' +
                 '<span class="msg-time">' + timestamp() + '</span>' +
-                '<span class="msg-enc-badge" title="AES-256-GCM encrypted">🔐</span>' +
+                '<span class="msg-enc-badge" title="AES-256-CTR encrypted">🔐</span>' +
             '</div>' +
             '<div class="msg-text msg-decrypting">// decrypting…</div>';
 
@@ -82,10 +96,7 @@ const Chat = (function () {
         }
     }
 
-    /**
-     * appendPrivateMessage — Change #11:
-     * Renders a DM with purple styling and direction label (you → Bob / Alice → you).
-     */
+    /* appendPrivateMessage — Change #11 */
     function appendPrivateMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
@@ -130,13 +141,80 @@ const Chat = (function () {
         }
     }
 
+    /* appendFileMessage — Change #13 */
+    function appendFileMessage(data) {
+        const msgs = document.getElementById('messages');
+        if (!msgs) return;
+
+        const isSelf = data.from === _currentUsername;
+        const wrap   = document.createElement('div');
+        wrap.className = 'msg msg-file';
+        wrap.id = 'file_' + data.id;
+
+        wrap.innerHTML =
+            '<div class="msg-header">' +
+                '<span class="file-badge">📎 FILE</span>' +
+                '<span class="msg-user">' + escHtml(data.from) + '</span>' +
+                '<span class="msg-time">' + timestamp() + '</span>' +
+            '</div>' +
+            '<div class="file-entry">' +
+                '<span class="file-icon">' + getFileIcon(data.type) + '</span>' +
+                '<div class="file-info">' +
+                    '<div class="file-name">' + escHtml(data.filename) + '</div>' +
+                    '<div class="file-status" id="fstatus_' + data.id + '">' +
+                        (isSelf ? 'Sent ✓' : 'Decrypting…') +
+                    '</div>' +
+                '</div>' +
+                '<button class="file-dl-btn" id="fdl_' + data.id + '" ' +
+                    (isSelf ? '' : 'disabled') + '>' +
+                    (isSelf ? '↗ Sent' : '⬇ Saving…') +
+                '</button>' +
+            '</div>';
+
+        msgs.appendChild(wrap);
+        scrollBottom();
+
+        if (isSelf) return; // sender already has the file
+
+        /* Decrypt and enable download */
+        if (SecureCrypto.isReady() && data.data) {
+            SecureCrypto.decrypt(data.data)
+                .then(function (base64FileData) {
+                    // Decode base64 → Uint8Array
+                    const bin    = atob(base64FileData);
+                    const bytes  = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    const blob   = new Blob([bytes], { type: data.type || 'application/octet-stream' });
+                    const url    = URL.createObjectURL(blob);
+
+                    const dlBtn  = document.getElementById('fdl_' + data.id);
+                    const status = document.getElementById('fstatus_' + data.id);
+                    if (dlBtn) {
+                        dlBtn.disabled  = false;
+                        dlBtn.textContent = '⬇ Download';
+                        dlBtn.onclick = function () {
+                            const a   = document.createElement('a');
+                            a.href    = url;
+                            a.download = data.filename;
+                            a.click();
+                        };
+                    }
+                    if (status) status.textContent = 'Ready — click to download';
+                })
+                .catch(function () {
+                    const status = document.getElementById('fstatus_' + data.id);
+                    if (status) { status.textContent = '⚠ Decrypt failed'; status.style.color = 'var(--danger)'; }
+                });
+        }
+    }
+
     function deleteMessage(id) {
-        const msg = document.getElementById('msg_' + id);
-        if (!msg) return;
-        msg.style.transition = 'opacity 0.35s, transform 0.35s';
-        msg.style.opacity = '0';
-        msg.style.transform = 'translateX(-14px)';
-        setTimeout(function () { msg.remove(); }, 380);
+        const el = document.getElementById('msg_' + id) || document.getElementById('file_' + id);
+        if (!el) return;
+        el.style.transition = 'opacity 0.35s, transform 0.35s';
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(-14px)';
+        setTimeout(function () { el.remove(); }, 380);
     }
 
     function appendSystem(text) {
@@ -150,76 +228,88 @@ const Chat = (function () {
     }
 
     /* ── Send helpers ─────────────────────────────────────────── */
+
     function sendPrivateMessage(to, msg) {
-        if (msg.length > 500) {
-            appendSystem('⚠ DM too long (max 500 characters).');
-            return;
-        }
-        if (!SecureCrypto.isReady()) {
-            appendSystem('⚠ Encryption not ready.');
-            return;
-        }
+        if (msg.length > 500) { appendSystem('⚠ DM too long (max 500 characters).'); return; }
+        if (!SecureCrypto.isReady()) { appendSystem('⚠ Encryption not ready.'); return; }
         SecureCrypto.encrypt(msg)
-            .then(function (ciphertext) {
-                socket.emit('private_message', { to: to, message: ciphertext });
-            })
-            .catch(function () {
-                appendSystem('⚠ Encryption failed. DM not sent.');
-            });
+            .then(function (ct) { socket.emit('private_message', { to: to, message: ct }); })
+            .catch(function () { appendSystem('⚠ Encryption failed. DM not sent.'); });
     }
 
-    /**
-     * sendMessage — Change #9 + #11:
-     * Detects /dm command for DMs; otherwise encrypts and broadcasts.
-     */
+    /* sendFile — Change #13 */
+    function sendFile(file) {
+        if (file.size > 5 * 1024 * 1024) {
+            appendSystem('⚠ File too large (max 5 MB): ' + file.name);
+            return;
+        }
+        appendSystem('📎 Encrypting ' + file.name + ' (' + formatBytes(file.size) + ')…');
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const bytes  = new Uint8Array(e.target.result);
+
+            // Encode raw bytes as base64 (the payload we'll encrypt)
+            let bin = '';
+            for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            const rawB64 = btoa(bin);
+
+            if (!SecureCrypto.isReady()) {
+                appendSystem('⚠ Encryption not ready.');
+                return;
+            }
+
+            SecureCrypto.encrypt(rawB64)
+                .then(function (encryptedB64) {
+                    socket.emit('send_file', {
+                        filename: file.name,
+                        type:     file.type || 'application/octet-stream',
+                        data:     encryptedB64,
+                    });
+                    appendSystem('📎 Sent: ' + file.name);
+                })
+                .catch(function () {
+                    appendSystem('⚠ File encryption failed.');
+                });
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    /* sendMessage — Change #9 + #11 */
     function sendMessage() {
         const input = document.getElementById('message');
         if (!input) return;
         const raw = input.value.trim();
         if (!raw) return;
 
-        /* ── /dm <username> <message> command ── */
+        /* /dm <username> <message> */
         if (raw.startsWith('/dm ')) {
             const remainder = raw.slice(4).trim();
             const spaceIdx  = remainder.indexOf(' ');
-            if (spaceIdx === -1) {
-                appendSystem('Usage: /dm <username> <message>');
-                return;
-            }
+            if (spaceIdx === -1) { appendSystem('Usage: /dm <username> <message>'); return; }
             const to  = remainder.slice(0, spaceIdx).trim();
             const msg = remainder.slice(spaceIdx + 1).trim();
-            if (!to || !msg) {
-                appendSystem('Usage: /dm <username> <message>');
-                return;
-            }
+            if (!to || !msg) { appendSystem('Usage: /dm <username> <message>'); return; }
             input.value = '';
             input.focus();
             sendPrivateMessage(to, msg);
             return;
         }
 
-        /* ── Regular broadcast message ── */
-        if (raw.length > 500) {
-            appendSystem('⚠ Message too long (max 500 characters).');
-            return;
-        }
-        if (!SecureCrypto.isReady()) {
-            appendSystem('⚠ Encryption not ready. Message not sent.');
-            return;
-        }
+        if (raw.length > 500) { appendSystem('⚠ Message too long (max 500 characters).'); return; }
+        if (!SecureCrypto.isReady()) { appendSystem('⚠ Encryption not ready.'); return; }
+
         input.value = '';
         input.focus();
         SecureCrypto.encrypt(raw)
-            .then(function (ciphertext) {
-                socket.emit('send_message', { message: ciphertext });
-            })
+            .then(function (ct) { socket.emit('send_message', { message: ct }); })
             .catch(function (err) {
                 console.error('[SecureCrypto] Encryption failed:', err);
                 appendSystem('⚠ Encryption failed. Message not sent.');
             });
     }
 
-    /* ── Key bindings + button listener (fix #17) ────────────── */
+    /* ── Key bindings + button listeners ─────────────────────── */
     document.addEventListener('DOMContentLoaded', function () {
 
         const msgInput = document.getElementById('message');
@@ -230,14 +320,26 @@ const Chat = (function () {
         }
 
         const sendBtn = document.getElementById('send-btn');
-        if (sendBtn) {
-            sendBtn.addEventListener('click', sendMessage);
+        if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+
+        /* Change #13: attach button opens file picker */
+        const attachBtn = document.getElementById('attach-btn');
+        const fileInput = document.getElementById('file-input');
+        if (attachBtn && fileInput) {
+            attachBtn.addEventListener('click', function () { fileInput.click(); });
+            fileInput.addEventListener('change', function () {
+                if (fileInput.files && fileInput.files[0]) {
+                    sendFile(fileInput.files[0]);
+                    fileInput.value = ''; // reset so same file can be re-selected
+                }
+            });
         }
     });
 
     return {
         appendMessage:        appendMessage,
         appendPrivateMessage: appendPrivateMessage,
+        appendFileMessage:    appendFileMessage,
         deleteMessage:        deleteMessage,
         appendSystem:         appendSystem,
         sendMessage:          sendMessage,

@@ -1,15 +1,15 @@
 /* ============================================================
    SecureLink — crypto.js
-   AES-256-GCM encryption using the browser's Web Crypto API.
-   No external libraries — works fully offline.
+   AES-256-CTR encryption using aes-js (pure JavaScript).
+   Works over plain HTTP — no browser secure-context restriction.
 
    Change #9: End-to-end encryption.
-   The server never sees plaintext — it relays ciphertext only.
+   Server relays ciphertext only and never sees plaintext.
    ============================================================ */
 
 const SecureCrypto = (function () {
 
-    let _key = null;  // CryptoKey object, set on approval
+    let _keyBytes = null;   // Uint8Array (32 bytes = 256-bit key)
 
     /* ── Helpers ─────────────────────────────────────────────── */
     function hexToBytes(hex) {
@@ -22,66 +22,88 @@ const SecureCrypto = (function () {
 
     function bytesToBase64(bytes) {
         let bin = '';
-        bytes.forEach(function (b) { bin += String.fromCharCode(b); });
+        for (let i = 0; i < bytes.length; i++) {
+            bin += String.fromCharCode(bytes[i]);
+        }
         return btoa(bin);
     }
 
     function base64ToBytes(b64) {
-        return Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0); });
+        const bin  = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) {
+            bytes[i] = bin.charCodeAt(i);
+        }
+        return bytes;
     }
 
     /* ── Public API ──────────────────────────────────────────── */
 
     /**
      * Import the raw AES key (hex string from server).
-     * Must be called before encrypt/decrypt.
+     * Returns a resolved Promise for API compatibility with socket.js.
      */
     function init(hexKey) {
-        const keyBytes = hexToBytes(hexKey);
-        return crypto.subtle.importKey(
-            'raw',
-            keyBytes,
-            { name: 'AES-GCM' },
-            false,                          // not extractable
-            ['encrypt', 'decrypt']
-        ).then(function (cryptoKey) {
-            _key = cryptoKey;
-            console.log('[SecureCrypto] AES-256-GCM key loaded.');
-        });
+        try {
+            _keyBytes = hexToBytes(hexKey);
+            console.log('[SecureCrypto] AES-256-CTR key loaded (aes-js, HTTP-safe).');
+            return Promise.resolve();
+        } catch (e) {
+            return Promise.reject(e);
+        }
     }
 
     /**
-     * Encrypt plaintext → base64(IV + ciphertext).
-     * Each call generates a fresh random 12-byte IV.
+     * Encrypt plaintext → base64(IV[16] + ciphertext).
+     * Uses crypto.getRandomValues() for IV — this DOES work over HTTP.
      */
     function encrypt(plaintext) {
-        if (!_key) return Promise.reject(new Error('Crypto not initialized'));
-        const iv       = crypto.getRandomValues(new Uint8Array(12));
-        const encoded  = new TextEncoder().encode(plaintext);
-        return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, _key, encoded)
-            .then(function (ciphertext) {
-                const combined = new Uint8Array(12 + ciphertext.byteLength);
-                combined.set(iv, 0);
-                combined.set(new Uint8Array(ciphertext), 12);
-                return bytesToBase64(combined);
-            });
+        if (!_keyBytes) return Promise.reject(new Error('Crypto not initialized'));
+        try {
+            const iv = new Uint8Array(16);
+            crypto.getRandomValues(iv);   // safe over HTTP (only subtle is restricted)
+
+            const textBytes    = aesjs.utils.utf8.toBytes(plaintext);
+            const aesCtr       = new aesjs.ModeOfOperation.ctr(
+                Array.from(_keyBytes),
+                new aesjs.Counter(Array.from(iv))
+            );
+            const encryptedBytes = aesCtr.encrypt(textBytes);
+
+            // Pack: IV(16) + ciphertext
+            const combined = new Uint8Array(16 + encryptedBytes.length);
+            combined.set(iv, 0);
+            combined.set(encryptedBytes, 16);
+
+            return Promise.resolve(bytesToBase64(combined));
+        } catch (e) {
+            return Promise.reject(e);
+        }
     }
 
     /**
-     * Decrypt base64(IV + ciphertext) → plaintext string.
+     * Decrypt base64(IV[16] + ciphertext) → plaintext string.
      */
     function decrypt(b64) {
-        if (!_key) return Promise.reject(new Error('Crypto not initialized'));
-        const combined  = base64ToBytes(b64);
-        const iv        = combined.slice(0, 12);
-        const ciphertext = combined.slice(12);
-        return crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, _key, ciphertext)
-            .then(function (decrypted) {
-                return new TextDecoder().decode(decrypted);
-            });
+        if (!_keyBytes) return Promise.reject(new Error('Crypto not initialized'));
+        try {
+            const combined       = base64ToBytes(b64);
+            const iv             = combined.slice(0, 16);
+            const ciphertext     = combined.slice(16);
+
+            const aesCtr         = new aesjs.ModeOfOperation.ctr(
+                Array.from(_keyBytes),
+                new aesjs.Counter(Array.from(iv))
+            );
+            const decryptedBytes = aesCtr.decrypt(ciphertext);
+
+            return Promise.resolve(aesjs.utils.utf8.fromBytes(decryptedBytes));
+        } catch (e) {
+            return Promise.reject(e);
+        }
     }
 
-    function isReady() { return _key !== null; }
+    function isReady() { return _keyBytes !== null; }
 
     return { init: init, encrypt: encrypt, decrypt: decrypt, isReady: isReady };
 

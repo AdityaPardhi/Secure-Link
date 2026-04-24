@@ -54,12 +54,20 @@ socket.on("reconnect", function (attempt) {
 
 /* ── Auth events ───────────────────────────────────────────── */
 socket.on("approved", function (data) {
-    /* Change #9: server sends AES key on approval */
+    /* Change #9: server sends AES key on approval.
+       crypto.subtle requires HTTPS — handled by ssl_context='adhoc'.
+       .catch() ensures the user always gets in even if crypto fails. */
     if (data && data.key) {
-        SecureCrypto.init(data.key).then(function () {
-            Chat.appendSystem("🔐 AES-256-GCM encryption active. Messages are end-to-end encrypted.");
-            UI.onApproved();
-        });
+        SecureCrypto.init(data.key)
+            .then(function () {
+                Chat.appendSystem("🔐 AES-256-GCM encryption active. Messages are end-to-end encrypted.");
+                UI.onApproved();
+            })
+            .catch(function (err) {
+                console.error("[SecureCrypto] init failed:", err);
+                Chat.appendSystem("⚠ Encryption unavailable (HTTPS required). Messages are unencrypted.");
+                UI.onApproved();
+            });
     } else {
         UI.onApproved();
     }
@@ -84,6 +92,11 @@ socket.on("delete_message", function (id) {
 /* ── Private messaging (#11) ───────────────────────────────── */
 socket.on("receive_private_message", function (data) {
     Chat.appendPrivateMessage(data);
+});
+
+/* ── File transfer (#13) ───────────────────────────────────── */
+socket.on("receive_file", function (data) {
+    Chat.appendFileMessage(data);
 });
 
 

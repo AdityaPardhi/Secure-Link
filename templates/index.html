@@ -218,10 +218,16 @@
 
     <div class="input-bar">
 
+        <!-- Hidden file input — triggered by attach button -->
+        <input type="file" id="file-input" style="display:none"
+               accept=".pdf,.png,.jpg,.jpeg,.gif,.txt,.zip,.docx,.xlsx,.csv">
+
+        <button class="attach-btn" id="attach-btn" title="Send file (max 5 MB)">📎</button>
+
         <div class="input-wrap">
 
             <input id="message"
-                   placeholder="transmit message…"
+                   placeholder="transmit message… (or /dm username msg)"
                    autocomplete="off">
 
         </div>
@@ -286,6 +292,8 @@ AWAITING AUTHENTICATION
 <!-- JAVASCRIPT FILES -->
 
 <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/aes.js') }}"></script>
 
 <script src="{{ url_for('static', filename='js/crypto.js') }}"></script>
 

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecureLink — Admin Dashboard</title>
 <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aes.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <style>
 /* ── Admin page layout ──────────────────────────────────────── */
@@ -373,6 +374,68 @@ input[type="range"]::-webkit-slider-thumb {
     box-shadow: 0 0 60px rgba(0,229,160,0.1);
 }
 .auth-fail { color: var(--danger); border-color: var(--danger); }
+
+/* Chat Monitor */
+.adm-chat-monitor {
+    border: 1px solid rgba(0,229,160,0.2);
+    background: rgba(0,229,160,0.02);
+    margin-bottom: 14px;
+}
+.adm-chat-monitor-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(0,229,160,0.15);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    color: var(--accent);
+    opacity: 0.8;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0,229,160,0.04);
+}
+.monitor-badge {
+    background: rgba(0,229,160,0.15);
+    color: var(--accent);
+    padding: 1px 7px;
+    font-size: 10px;
+    border-radius: 2px;
+}
+.adm-chat-monitor-body {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.adm-chat-monitor-body::-webkit-scrollbar { width: 3px; }
+.adm-chat-monitor-body::-webkit-scrollbar-thumb { background: rgba(0,229,160,0.2); }
+.monitor-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 4px 6px;
+    border-left: 3px solid transparent;
+    animation: msgIn 0.15s ease both;
+}
+.monitor-group { border-left-color: var(--accent); background: rgba(0,229,160,0.03); }
+.monitor-dm    { border-left-color: #9d5cff; background: rgba(157,92,255,0.04); }
+.monitor-type-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+    padding: 1px 5px;
+}
+.monitor-group .monitor-type-badge { color: var(--accent); }
+.monitor-dm    .monitor-type-badge { color: #9d5cff; }
+.monitor-label { color: var(--muted); flex-shrink: 0; min-width: 80px; }
+.monitor-text  { color: var(--text); flex: 1; word-break: break-word; }
+.monitor-packet { color: var(--muted); opacity: 0.45; flex-shrink: 0; font-size: 9px; }
 </style>
 </head>
 <body>
@@ -444,23 +507,15 @@ input[type="range"]::-webkit-slider-thumb {
         </div>
     </div>
 
-    <!-- Network Simulation (#7, #8) -->
-    <div class="adm-netsim-section">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-            <div class="adm-section-label sim-label">🌐 Network Simulation</div>
-            <span class="sim-active-badge" id="sim-status">OFF</span>
+    <!-- Chat Monitor (replaces Network Simulation) -->
+    <div class="adm-chat-monitor">
+        <div class="adm-chat-monitor-header">
+            🗨 CHAT MONITOR
+            <span class="monitor-badge" id="monitor-count">0</span>
         </div>
-        <div class="sim-rows">
-            <div class="sim-row">
-                <div class="sim-row-label">Packet Delay <span id="delay-val">0</span> ms</div>
-                <input type="range" id="sim-delay" min="0" max="2000" step="50" value="0">
-            </div>
-            <div class="sim-row">
-                <div class="sim-row-label">Packet Loss <span id="loss-val">0</span> %</div>
-                <input type="range" id="sim-loss" min="0" max="100" step="5" value="0">
-            </div>
+        <div class="adm-chat-monitor-body" id="monitor-log">
+            <div class="adm-empty" id="monitor-empty">No messages yet.</div>
         </div>
-        <button class="sim-apply-btn" id="sim-apply">▶ APPLY</button>
     </div>
 
     <!-- Bottom Row -->
@@ -592,7 +647,44 @@ socket.on('admin_auth_ok', function(data) {
     updateUsersList(data.users || []);
     (data.pending || []).forEach(addPendingCard);
     addLog('Admin session authenticated.');
+
+    /* Init decryption so admin can read chat messages */
+    if (data.key) {
+        const keyBytes = hexToBytes(data.key);
+        _adminKeyBytes = keyBytes;
+        addLog('Chat decryption key loaded.');
+    }
 });
+
+/* ── AES helpers for admin monitor ──────────────────────────── */
+var _adminKeyBytes = null;
+
+function hexToBytes(hex) {
+    var bytes = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    }
+    return bytes;
+}
+
+function adminDecrypt(b64) {
+    if (!_adminKeyBytes) return '[key not loaded]';
+    try {
+        var bin = atob(b64);
+        var combined = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) combined[i] = bin.charCodeAt(i);
+        var iv         = combined.slice(0, 16);
+        var ciphertext = combined.slice(16);
+        var aesCtr = new aesjs.ModeOfOperation.ctr(
+            Array.from(_adminKeyBytes),
+            new aesjs.Counter(Array.from(iv))
+        );
+        var decrypted = aesCtr.decrypt(ciphertext);
+        return aesjs.utils.utf8.fromBytes(decrypted);
+    } catch(e) {
+        return '[decrypt error]';
+    }
+}
 
 socket.on('admin_auth_failed', function(data) {
     const box = document.getElementById('auth-box');
@@ -629,6 +721,45 @@ socket.on('system_message', function(msg) {
 socket.on('intrusion_alert', function(data) {
     addIntrusionAlert(data);
 });
+
+/* ── Chat Monitor ────────────────────────────────────────────── */
+socket.on('receive_message', function(data) {
+    addMonitorEntry(
+        'group',
+        esc(data.username),
+        data.packet_id,
+        adminDecrypt(data.message)
+    );
+});
+
+socket.on('receive_private_message', function(data) {
+    addMonitorEntry(
+        'dm',
+        esc(data.from) + ' → ' + esc(data.to),
+        data.packet_id,
+        adminDecrypt(data.message)
+    );
+});
+
+function addMonitorEntry(type, label, packetId, plaintext) {
+    const log   = document.getElementById('monitor-log');
+    const empty = document.getElementById('monitor-empty');
+    if (empty) empty.remove();
+
+    const entry = document.createElement('div');
+    entry.className = 'monitor-entry monitor-' + type;
+    entry.innerHTML =
+        '<span class="monitor-type-badge">' + (type === 'dm' ? '🔒 DM' : '🗨 GROUP') + '</span>' +
+        '<span class="monitor-label">' + label + '</span>' +
+        '<span class="monitor-text">' + esc(plaintext) + '</span>' +
+        '<span class="monitor-packet">#' + (packetId || '?') + '</span>';
+
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+
+    const badge = document.getElementById('monitor-count');
+    if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+}
 
 function addIntrusionAlert(data) {
     const log = document.getElementById('intrusion-log');
@@ -697,36 +828,6 @@ document.getElementById('alert-btn').addEventListener('click', function() {
 });
 document.getElementById('alert-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') document.getElementById('alert-btn').click();
-});
-
-/* ── Network Simulation (#7, #8) ────────────────────────────── */
-document.getElementById('sim-delay').addEventListener('input', function() {
-    document.getElementById('delay-val').textContent = this.value;
-});
-document.getElementById('sim-loss').addEventListener('input', function() {
-    document.getElementById('loss-val').textContent = this.value;
-});
-document.getElementById('sim-apply').addEventListener('click', function() {
-    const delay = parseInt(document.getElementById('sim-delay').value);
-    const loss  = parseInt(document.getElementById('sim-loss').value);
-    socket.emit('set_network_sim', { delay: delay, loss: loss });
-});
-
-socket.on('network_sim_update', function(data) {
-    document.getElementById('sim-delay').value = data.delay;
-    document.getElementById('delay-val').textContent = data.delay;
-    document.getElementById('sim-loss').value  = data.loss;
-    document.getElementById('loss-val').textContent  = data.loss;
-
-    const badge = document.getElementById('sim-status');
-    const active = data.delay > 0 || data.loss > 0;
-    if (badge) {
-        badge.textContent = active
-            ? 'ACTIVE — ' + data.delay + 'ms / ' + data.loss + '% loss'
-            : 'OFF';
-        badge.classList.toggle('active', active);
-    }
-    addLog('Network sim: delay=' + data.delay + 'ms  loss=' + data.loss + '%');
 });
 </script>
 

@@ -73,12 +73,9 @@ _pending:            dict        = {}   # sid → {username, ip, time}
 _pending_lock                    = threading.Lock()
 _last_message_time:  dict        = {}
 _MESSAGE_COOLDOWN                = 0.5
-_MAX_MESSAGE_LEN  = 500     # plaintext character limit (enforced client-side before encrypt)
-_MAX_CIPHERTEXT_LEN = 1500  # server-side limit for AES-GCM ciphertext (base64)
-
-# Network simulation
-_packet_delay_ms:    int         = 0    # 0–2000 ms added before each broadcast
-_packet_loss_pct:    int         = 0    # 0–100 % chance to drop a packet
+_MAX_MESSAGE_LEN    = 500
+_MAX_CIPHERTEXT_LEN = 1500
+_MAX_FILE_SIZE      = 5 * 1024 * 1024  # 5 MB plaintext limit
 
 
 # ── Stats broadcaster ─────────────────────────────────────────
@@ -201,6 +198,7 @@ def handle_admin_connect(data):
         "server_ip": server_ip,
         "users":     sessions.all_users_info(),
         "pending":   pending_list,
+        "key":       AES_KEY,          # so admin can decrypt chat messages
     })
 
 
@@ -334,9 +332,11 @@ def handle_private_message(data):
         "id":        msg_id,
     }
 
-    # Deliver only to recipient and echo back to sender
+    # Deliver to recipient, echo to sender, and copy to admin monitor
     socketio.emit("receive_private_message", dm_payload, room=target_sid)
     socketio.emit("receive_private_message", dm_payload, room=sid)
+    if _admin_sid and _admin_sid not in (target_sid, sid):
+        socketio.emit("receive_private_message", dm_payload, room=_admin_sid)
     logger.info("DM: %s → %s [Packet %d]", sender, recipient, packet_id)
 
     def delete_later(mid):
@@ -346,21 +346,6 @@ def handle_private_message(data):
     threading.Thread(target=delete_later, args=(msg_id,), daemon=True).start()
 
 
-
-
-@socketio.on("set_network_sim")
-def handle_network_sim(data):
-    """Admin sets packet delay and loss simulation values."""
-    global _packet_delay_ms, _packet_loss_pct
-    if request.sid != _admin_sid:
-        return
-    _packet_delay_ms = max(0, min(2000, int(data.get("delay", 0))))
-    _packet_loss_pct = max(0,  min(100, int(data.get("loss",  0))))
-    logger.info("Network sim updated: delay=%dms loss=%d%%", _packet_delay_ms, _packet_loss_pct)
-    socketio.emit("network_sim_update", {
-        "delay": _packet_delay_ms,
-        "loss":  _packet_loss_pct,
-    })
 
 
 # =========================================
@@ -378,19 +363,9 @@ def handle_message(data):
     message = data.get("message", "").strip()
     if not message:
         return
-    if len(message) > _MAX_MESSAGE_LEN:
-        emit("error", {"reason": f"Message exceeds {_MAX_MESSAGE_LEN} characters."})
+    if len(message) > _MAX_CIPHERTEXT_LEN:
+        emit("error", {"reason": "Message too large."})
         return
-
-    # Packet loss simulation (#8)
-    if _packet_loss_pct > 0 and random.random() < (_packet_loss_pct / 100.0):
-        emit("packet_lost", {"pct": _packet_loss_pct})
-        logger.info("Packet dropped (loss=%d%%)", _packet_loss_pct)
-        return
-
-    # Packet delay simulation (#7)
-    if _packet_delay_ms > 0:
-        time.sleep(_packet_delay_ms / 1000.0)
 
     username  = sessions.get_username(sid) or "Unknown"
     packet_id = monitor.increment_stats(len(message.encode()))
@@ -409,6 +384,39 @@ def handle_message(data):
         socketio.emit("delete_message", mid)
 
     threading.Thread(target=delete_later, args=(msg_id,), daemon=True).start()
+
+
+# =========================================
+# 📤 FILE TRANSFER HANDLER
+# =========================================
+
+@socketio.on("send_file")
+def handle_file(data):
+    sid = request.sid
+    sender = sessions.get_username(sid)
+    if not sender:
+        return
+
+    filename  = str(data.get("filename", "file"))[:255]
+    file_data = data.get("data", "")       # base64-encoded (AES-encrypted) bytes
+    file_type = data.get("type", "application/octet-stream")
+
+    # Limit: base64 of 5 MB ≈ 7 MB
+    if len(file_data) > 7_000_000:
+        emit("error", {"reason": "File too large (max 5 MB)"})
+        return
+
+    file_id = str(uuid.uuid4())
+    payload = {
+        "from":     sender,
+        "filename": filename,
+        "type":     file_type,
+        "data":     file_data,
+        "id":       file_id,
+    }
+
+    socketio.emit("receive_file", payload)
+    logger.info("File transfer: %s sent '%s' (%d bytes b64)", sender, filename, len(file_data))
 
 
 # =========================================
