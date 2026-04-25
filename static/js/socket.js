@@ -2,7 +2,6 @@
    SecureLink — socket.js
    Handles all Socket.IO event listeners.
 
-   Fix #19: var → const/let throughout
    ============================================================ */
 
 const socket = io();
@@ -54,9 +53,6 @@ socket.on("reconnect", function (attempt) {
 
 /* ── Auth events ───────────────────────────────────────────── */
 socket.on("approved", function (data) {
-    /* Change #9: server sends AES key on approval.
-       crypto.subtle requires HTTPS — handled by ssl_context='adhoc'.
-       .catch() ensures the user always gets in even if crypto fails. */
     if (data && data.key) {
         SecureCrypto.init(data.key)
             .then(function () {
@@ -89,17 +85,17 @@ socket.on("delete_message", function (id) {
     Chat.deleteMessage(id);
 });
 
-/* ── Private messaging (#11) ───────────────────────────────── */
+/* ── Private messaging ───────────────────────────────── */
 socket.on("receive_private_message", function (data) {
     Chat.appendPrivateMessage(data);
 });
 
-/* ── File transfer (#13) ───────────────────────────────────── */
+/* ── File transfer ───────────────────────────────────── */
 socket.on("receive_file", function (data) {
     Chat.appendFileMessage(data);
 });
 
-/* ── Voice messages (#14) ───────────────────────────────── */
+/* ── Voice messages ───────────────────────────────── */
 socket.on("receive_voice", function (data) {
     Chat.appendVoiceMessage(data);
 });
@@ -113,12 +109,12 @@ socket.on("update_users", function (users) {
     UI.updateUsers(users);
 });
 
-/* ── Live stats (Change #1) ────────────────────────────────── */
+/* ── Live stats ────────────────────────────────── */
 socket.on("stats_update", function (data) {
     UI.updateStats(data);
 });
 
-/* ── Admin controls (events that affect chat users) ─────────── */
+/* ── Admin controls  ─────────────────────────── */
 socket.on("kicked", function (data) {
     UI.showTerminated(data.reason || "You have been removed from the session.");
 });
@@ -131,8 +127,8 @@ socket.on("security_alert", function (data) {
     UI.showSecurityAlert(data.message);
 });
 
-/* ── Network simulation feedback (#7, #8) ──────────────────── */
+/* ── Network simulation feedback ──────────────────── */
 socket.on("packet_lost", function (data) {
     Chat.appendSystem("⚠ Your packet was dropped (simulated " + data.pct + "% loss rate).");
 });
-
+

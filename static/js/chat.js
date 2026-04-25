@@ -1,18 +1,11 @@
 /* ============================================================
    SecureLink — chat.js
    Handles message rendering and chat interactions.
-
-   Fix #17: send-btn wired via addEventListener (onclick removed from HTML)
-   Fix #19: var → const/let throughout
-   Change #9:  sendMessage encrypts; appendMessage decrypts
-   Change #11: /dm command and appendPrivateMessage
-   Change #13: file transfer via send_file / receive_file
-   Change #14: voice messages via mic button (MediaRecorder)
    ============================================================ */
 
 const Chat = (function () {
 
-    let _currentUsername = null;  // set on join (Change #11)
+    let _currentUsername = null; 
 
     /* ── Helpers ─────────────────────────────────────────────── */
     function escHtml(str) {
@@ -57,7 +50,7 @@ const Chat = (function () {
 
     function setUsername(name) { _currentUsername = name; }
 
-    /* appendMessage — Change #9 */
+    /* appendMessage  */
     function appendMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
@@ -97,7 +90,7 @@ const Chat = (function () {
         }
     }
 
-    /* appendPrivateMessage — Change #11 */
+    /* appendPrivateMessage */
     function appendPrivateMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
@@ -142,7 +135,7 @@ const Chat = (function () {
         }
     }
 
-    /* appendFileMessage — Change #13 */
+    /* appendFileMessage */
     function appendFileMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
@@ -209,7 +202,7 @@ const Chat = (function () {
         }
     }
 
-    /* appendVoiceMessage — Change #14 */
+    /* appendVoiceMessage */
     function appendVoiceMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
@@ -303,7 +296,7 @@ const Chat = (function () {
             .catch(function () { appendSystem('⚠ Encryption failed. DM not sent.'); });
     }
 
-    /* sendFile — Change #13 */
+    /* sendFile */
     function sendFile(file) {
         if (file.size > 5 * 1024 * 1024) {
             appendSystem('⚠ File too large (max 5 MB): ' + file.name);
@@ -341,7 +334,7 @@ const Chat = (function () {
         reader.readAsArrayBuffer(file);
     }
 
-    /* sendVoice — Change #14 */
+    /* sendVoice */
     let _mediaRecorder = null;
     let _audioChunks   = [];
     let _isRecording   = false;
@@ -481,7 +474,7 @@ const Chat = (function () {
             });
         }
 
-        /* Change #14: mic button toggles recording on/off */
+        /* mic button toggles recording on/off */
         const micBtn = document.getElementById('mic-btn');
         if (micBtn) {
             micBtn.addEventListener('click', function () {

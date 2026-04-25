@@ -362,7 +362,7 @@ def handle_message(data):
     packet_id = monitor.increment_stats(len(message.encode()))
     msg_id    = str(uuid.uuid4())
 
-    # Relay ciphertext — server never decrypts (Change #9)
+    # Relay ciphertext — server never decrypts
     socketio.emit("receive_message", {
         "username":  username,
         "message":   message,       # AES-256-GCM ciphertext (base64)
@@ -412,7 +412,6 @@ def handle_file(data):
     # Increment file stats with the mime type
     monitor.increment_file_stats(len(file_data), file_type)
     
-    # Intentionally omitted logger.info for file transfers to keep terminal clean
 
 
 # =========================================

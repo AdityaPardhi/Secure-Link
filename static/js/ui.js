@@ -2,9 +2,6 @@
    SecureLink — ui.js
    Handles UI state, login flow, and user list updates.
 
-   Fix #17: login-btn wired via addEventListener (onclick removed from HTML)
-   Fix #18: alert() replaced with inline #login-error element
-   Fix #19: var → const/let throughout
    ============================================================ */
 
 const UI = (function () {
@@ -12,7 +9,7 @@ const UI = (function () {
     /* ── Login lock — prevents duplicate requests ─────────────── */
     let loginInProgress = false;
 
-    /* ── Inline error helper (fix #18) ──────────────────────── */
+    /* ── Inline error helper  ──────────────────────── */
     function showLoginError(msg) {
         const errEl = document.getElementById('login-error');
         if (!errEl) return;
@@ -43,7 +40,7 @@ const UI = (function () {
 
         loginInProgress = true;
 
-        /* Change #11: store current username for DM direction labels */
+        /* store current username for DM direction labels */
         Chat.setUsername(username);
 
         const pending = document.getElementById('pending-overlay');
@@ -81,7 +78,7 @@ const UI = (function () {
         if (msgInput) setTimeout(function () { msgInput.focus(); }, 100);
     }
 
-    /* ── Rejected (fix #18) ──────────────────────────────────── */
+    /* ── Rejected  ──────────────────────────────────── */
     function onRejected(reason) {
         console.warn('Access rejected:', reason);
 
@@ -102,11 +99,11 @@ const UI = (function () {
         const pass = document.getElementById('password');
         if (pass) pass.value = '';
 
-        /* Fix #18: inline error instead of alert() */
+        /* inline error instead of alert() */
         showLoginError('Access Denied: ' + (reason || 'Unauthorized'));
     }
 
-    /* ── User List (Change #2 + #3: shows IP, online dot, join/leave hints) */
+    /* ── User List  (shows IP, online dot, join/leave hints) */
     let _prevUsernames = [];
 
     function updateUsers(users) {
@@ -162,7 +159,7 @@ const UI = (function () {
                     '<span class="user-name">' + escHtml(name) + '</span>' +
                     (ip ? '<span class="user-ip">' + escHtml(ip) + '</span>' : '');
 
-                /* Change #11: click to pre-fill /dm command */
+                /*  click to pre-fill /dm command */
                 li.addEventListener('click', function () {
                     const input = document.getElementById('message');
                     if (input) {
@@ -200,7 +197,7 @@ const UI = (function () {
         });
     }
 
-    /* ── Live Stats Panel (Change #1) ───────────────────────── */
+    /* ── Live Stats Panel ───────────────────────── */
     function fmtBytes(b) {
         if (b >= 1048576) return (b / 1048576).toFixed(2) + ' MB';
         if (b >= 1024)    return (b / 1024).toFixed(1)    + ' KB';
@@ -283,7 +280,7 @@ const UI = (function () {
         setTimeout(function () { banner.classList.remove('active'); }, 8000);
     }
 
-    /* ── Key bindings for login form + button listener (fix #17) */
+    /* ── Key bindings for login form + button listener */
     document.addEventListener('DOMContentLoaded', function () {
         const usernameInput = document.getElementById('username');
         const passwordInput = document.getElementById('password');
@@ -302,7 +299,7 @@ const UI = (function () {
             });
         }
 
-        /* Fix #17: addEventListener replaces inline onclick */
+        /* addEventListener replaces inline onclick */
         const loginBtn = document.getElementById('login-btn');
         if (loginBtn) {
             loginBtn.addEventListener('click', join);

@@ -2,9 +2,6 @@
    SecureLink — crypto.js
    AES-256-CTR encryption using aes-js (pure JavaScript).
    Works over plain HTTP — no browser secure-context restriction.
-
-   Change #9: End-to-end encryption.
-   Server relays ciphertext only and never sees plaintext.
    ============================================================ */
 
 const SecureCrypto = (function () {

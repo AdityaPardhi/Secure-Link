@@ -126,7 +126,6 @@
             return result;
         }
 
-        // http://ixti.net/development/javascript/2011/11/11/base64-encodedecode-of-utf8-in-browser-with-js.html
         var Hex = '0123456789abcdef';
 
         function fromBytes(bytes) {
@@ -707,7 +706,6 @@
     ModeOfOperationCTR.prototype.decrypt = ModeOfOperationCTR.prototype.encrypt;
 
 
-    ///////////////////////
     // Padding
 
     // See:https://tools.ietf.org/html/rfc2315
@@ -741,7 +739,6 @@
         return result;
     }
 
-    ///////////////////////
     // Exporting
 
 
@@ -782,9 +779,7 @@
     if (typeof exports !== 'undefined') {
         module.exports = aesjs
 
-    // RequireJS/AMD
-    // http://www.requirejs.org/docs/api.html
-    // https://github.com/amdjs/amdjs-api/wiki/AMD
+
     } else if (typeof(define) === 'function' && define.amd) {
         define([], function() { return aesjs; });
 

@@ -3,10 +3,6 @@
    style.css
    ============================================================ */
 
-/* Fonts: Google Fonts @import removed — system fonts used as offline fallbacks.
-   If internet is available the browser will still load them from the HTML <link>.
-   If offline, the fallback stack below keeps the UI looking clean. */
-
 /* ── CSS Variables ─────────────────────────────────────────── */
 :root {
     --bg: #080c10;
@@ -362,7 +358,6 @@ body::after {
     border-left-color: var(--accent);
 }
 
-/* Change #2: username + IP layout inside each user row */
 #users li {
     flex-direction: column;
     align-items: flex-start;
@@ -957,7 +952,6 @@ body::after {
     animation: rejFlash 0.6s ease;
 }
 
-/* ── Inline Login Error (fix #18 — replaces alert()) ────────── */
 .login-error {
     display: none;
     background: rgba(255, 76, 106, 0.12);
@@ -970,7 +964,7 @@ body::after {
     animation: msgIn 0.25s ease both;
 }
 
-/* ── Live Network Stats Panel (Change #1) ────────────────────── */
+/* ── Live Network Stats Panel ────────────────────── */
 .stats-panel {
     border-top: 1px solid var(--border);
     padding: 12px 14px 16px;
@@ -1206,7 +1200,7 @@ body::after {
 .reconnect-btn:hover  { opacity: 0.85; }
 .reconnect-btn:active { transform: scale(0.97); }
 
-/* ── AES Encryption UI (Change #9) ─────────────────────────── */
+/* ── AES Encryption UI ─────────────────────────── */
 .msg-decrypting {
     color: var(--muted) !important;
     font-style: italic;
@@ -1219,7 +1213,7 @@ body::after {
     vertical-align: middle;
 }
 
-/* ── Private Messaging (Change #11) ─────────────────────────── */
+/* ── Private Messaging  ─────────────────────────── */
 .msg-private {
     border-left: 3px solid #9d5cff;
     background: rgba(157, 92, 255, 0.05);
@@ -1242,7 +1236,7 @@ body::after {
     transition: color 0.15s;
 }
 
-/* ── File Transfer (Change #13) ─────────────────────────────── */
+/* ── File Transfer ─────────────────────────────── */
 .attach-btn {
     background: transparent;
     border: 1px solid var(--border2);
@@ -1302,4 +1296,4 @@ body::after {
 }
 .file-dl-btn:disabled { opacity: 0.4; cursor: default; }
 .file-dl-btn:not(:disabled):hover { opacity: 0.85; }
-
+

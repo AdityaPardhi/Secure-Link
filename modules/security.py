@@ -57,7 +57,6 @@ class SecurityManager:
 
         if count >= 3:
             self._blocked.add(ip)
-            # Fix #8: remove entry to stop dict growing forever
             self._failed.pop(ip, None)
             logger.warning("IP BLOCKED: %s", ip)
 
@@ -87,4 +86,4 @@ class SecurityManager:
 
 
 # ── Module-level singleton ─────────────────────────────────────
-security = SecurityManager()
+security = SecurityManager()
