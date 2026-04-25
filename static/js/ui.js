@@ -106,16 +106,40 @@ const UI = (function () {
         showLoginError('Access Denied: ' + (reason || 'Unauthorized'));
     }
 
-    /* ── User List (Change #2: shows IP per user) ────────────── */
+    /* ── User List (Change #2 + #3: shows IP, online dot, join/leave hints) */
+    let _prevUsernames = [];
+
     function updateUsers(users) {
         const ul = document.getElementById('users');
         if (!ul) return;
         ul.innerHTML = '';
 
+        const names = (users || []).map(function (u) {
+            return typeof u === 'object' ? u.username : u;
+        });
+
+        /* Announce joins and leaves */
+        names.forEach(function (n) {
+            if (!_prevUsernames.includes(n)) {
+                /* New user appeared — Chat.appendSystem may not exist yet during init */
+                if (typeof Chat !== 'undefined' && _prevUsernames.length > 0) {
+                    Chat.appendSystem('🟢 ' + n + ' is now online.');
+                }
+            }
+        });
+        _prevUsernames.forEach(function (n) {
+            if (!names.includes(n)) {
+                if (typeof Chat !== 'undefined') {
+                    Chat.appendSystem('🔴 ' + n + ' went offline.');
+                }
+            }
+        });
+        _prevUsernames = names;
+
         /* Update sidebar header with live count */
         const section = document.querySelector('.sidebar-section');
         if (section) {
-            section.textContent = 'Online Users' + (users && users.length ? ' (' + users.length + ')' : '');
+            section.textContent = 'Online Users' + (names.length ? ' (' + names.length + ')' : '');
         }
 
         if (!users || users.length === 0) {
@@ -132,6 +156,9 @@ const UI = (function () {
                 li.title  = 'Click to send a private message';
                 li.style.cursor = 'pointer';
                 li.innerHTML =
+                    '<span class="user-online-dot" style="display:inline-block;width:7px;height:7px;' +
+                        'border-radius:50%;background:var(--accent);margin-right:7px;' +
+                        'box-shadow:0 0 6px rgba(0,229,160,0.6);flex-shrink:0;"></span>' +
                     '<span class="user-name">' + escHtml(name) + '</span>' +
                     (ip ? '<span class="user-ip">' + escHtml(ip) + '</span>' : '');
 
@@ -152,7 +179,16 @@ const UI = (function () {
         if (_isAdmin) updateAdminUserList(users);
     }
 
+
     /* ── Utilities ───────────────────────────────────────────── */
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
     function shakeEl(el) {
         if (!el) return;
         el.classList.remove('shake');

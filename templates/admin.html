@@ -436,6 +436,33 @@ input[type="range"]::-webkit-slider-thumb {
 .monitor-label { color: var(--muted); flex-shrink: 0; min-width: 80px; }
 .monitor-text  { color: var(--text); flex: 1; word-break: break-word; }
 .monitor-packet { color: var(--muted); opacity: 0.45; flex-shrink: 0; font-size: 9px; }
+
+/* File monitor entry */
+.monitor-file { border-left-color: #ff9d00; background: rgba(255,157,0,0.04); }
+.monitor-file .monitor-type-badge { color: #ff9d00; }
+.monitor-file-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,157,0,0.06);
+    border: 1px solid rgba(255,157,0,0.2);
+    padding: 6px 10px;
+    margin-top: 4px;
+    border-radius: 3px;
+    width: 100%;
+}
+.monitor-file-icon { font-size: 18px; flex-shrink: 0; }
+.monitor-file-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.monitor-file-name { font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.monitor-file-status { font-size: 9px; color: var(--muted); }
+.monitor-dl-btn {
+    background: #ff9d00; color: #000; border: none;
+    padding: 4px 10px; font-family: var(--font-mono);
+    font-size: 10px; font-weight: 700; cursor: pointer;
+    flex-shrink: 0; transition: opacity 0.2s;
+}
+.monitor-dl-btn:hover { opacity: 0.85; }
+.monitor-dl-btn:disabled { opacity: 0.4; cursor: default; }
 </style>
 </head>
 <body>
@@ -739,6 +766,84 @@ socket.on('receive_private_message', function(data) {
         data.packet_id,
         adminDecrypt(data.message)
     );
+});
+
+/* ── File Monitor ────────────────────────────────────────────── */
+socket.on('receive_file', function(data) {
+    const log   = document.getElementById('monitor-log');
+    const empty = document.getElementById('monitor-empty');
+    if (empty) empty.remove();
+
+    const icons = {
+        'image/':       '🖼',
+        'application/pdf': '📕',
+        'zip':          '🗜',
+        'spreadsheet':  '📊',
+        'csv':          '📊',
+        'word':         '📝',
+        'document':     '📝',
+    };
+    function getIcon(type) {
+        if (!type) return '📄';
+        for (var k in icons) { if (type.includes(k)) return icons[k]; }
+        return '📄';
+    }
+
+    var fileId = 'admfile_' + data.id;
+    var entry = document.createElement('div');
+    entry.className = 'monitor-entry monitor-file';
+    entry.style.flexDirection = 'column';
+    entry.style.alignItems = 'flex-start';
+    entry.innerHTML =
+        '<span class="monitor-type-badge">📎 FILE</span>' +
+        '<span class="monitor-label">' + esc(data.from) + '</span>' +
+        '<div class="monitor-file-card">' +
+            '<span class="monitor-file-icon">' + getIcon(data.type) + '</span>' +
+            '<div class="monitor-file-info">' +
+                '<div class="monitor-file-name">' + esc(data.filename) + '</div>' +
+                '<div class="monitor-file-status" id="' + fileId + '_status">Decrypting…</div>' +
+            '</div>' +
+            '<button class="monitor-dl-btn" id="' + fileId + '_btn" disabled>⬇ Saving…</button>' +
+        '</div>';
+
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+
+    var badge = document.getElementById('monitor-count');
+    if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+
+    /* Decrypt and enable download */
+    if (_adminKeyBytes && data.data) {
+        var plainB64 = adminDecrypt(data.data);
+        if (plainB64 && plainB64 !== '[decrypt error]' && plainB64 !== '[key not loaded]') {
+            try {
+                var bin   = atob(plainB64);
+                var bytes = new Uint8Array(bin.length);
+                for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                var blob  = new Blob([bytes], { type: data.type || 'application/octet-stream' });
+                var url   = URL.createObjectURL(blob);
+                var dlBtn = document.getElementById(fileId + '_btn');
+                var status = document.getElementById(fileId + '_status');
+                if (dlBtn) {
+                    dlBtn.disabled = false;
+                    dlBtn.textContent = '⬇ Download';
+                    (function(u, fn) {
+                        dlBtn.onclick = function() {
+                            var a = document.createElement('a');
+                            a.href = u; a.download = fn; a.click();
+                        };
+                    })(url, data.filename);
+                }
+                if (status) status.textContent = 'Ready — click to download';
+            } catch(e) {
+                var st = document.getElementById(fileId + '_status');
+                if (st) { st.textContent = '⚠ Decode failed'; st.style.color = 'var(--danger)'; }
+            }
+        } else {
+            var st = document.getElementById(fileId + '_status');
+            if (st) { st.textContent = '⚠ Decrypt failed'; st.style.color = 'var(--danger)'; }
+        }
+    }
 });
 
 function addMonitorEntry(type, label, packetId, plaintext) {

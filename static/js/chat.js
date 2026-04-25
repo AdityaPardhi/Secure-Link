@@ -7,6 +7,7 @@
    Change #9:  sendMessage encrypts; appendMessage decrypts
    Change #11: /dm command and appendPrivateMessage
    Change #13: file transfer via send_file / receive_file
+   Change #14: voice messages via mic button (MediaRecorder)
    ============================================================ */
 
 const Chat = (function () {
@@ -208,8 +209,73 @@ const Chat = (function () {
         }
     }
 
+    /* appendVoiceMessage — Change #14 */
+    function appendVoiceMessage(data) {
+        const msgs = document.getElementById('messages');
+        if (!msgs) return;
+
+        const isSelf = data.from === _currentUsername;
+        const wrap   = document.createElement('div');
+        wrap.className = 'msg msg-file';
+        wrap.id = 'voice_' + data.id;
+
+        wrap.innerHTML =
+            '<div class="msg-header">' +
+                '<span class="file-badge">🎤 VOICE</span>' +
+                '<span class="msg-user">' + escHtml(data.from) + '</span>' +
+                '<span class="msg-time">' + timestamp() + '</span>' +
+            '</div>' +
+            '<div class="file-entry">' +
+                '<span class="file-icon">🎤</span>' +
+                '<div class="file-info">' +
+                    '<div class="file-name">Voice Message</div>' +
+                    '<div class="file-status" id="vstatus_' + data.id + '">' +
+                        (isSelf ? 'Sent ✓' : 'Decrypting…') +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div id="vaudio_' + data.id + '"></div>';
+
+        msgs.appendChild(wrap);
+        scrollBottom();
+
+        if (isSelf) {
+            /* sender: show their own audio directly */
+            const status = document.getElementById('vstatus_' + data.id);
+            if (status) status.textContent = 'Sent ✓';
+            return;
+        }
+
+        /* Decrypt and build audio player */
+        if (SecureCrypto.isReady() && data.data) {
+            SecureCrypto.decrypt(data.data)
+                .then(function (base64Audio) {
+                    const bin    = atob(base64Audio);
+                    const bytes  = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    const blob   = new Blob([bytes], { type: data.mimeType || 'audio/webm' });
+                    const url    = URL.createObjectURL(blob);
+
+                    const audioEl  = document.createElement('audio');
+                    audioEl.controls  = true;
+                    audioEl.src       = url;
+                    audioEl.style.cssText = 'width:100%;margin-top:6px;filter:invert(1) hue-rotate(130deg);';
+
+                    const container = document.getElementById('vaudio_' + data.id);
+                    if (container) container.appendChild(audioEl);
+
+                    const status = document.getElementById('vstatus_' + data.id);
+                    if (status) status.textContent = '▶ Ready to play';
+                })
+                .catch(function () {
+                    const status = document.getElementById('vstatus_' + data.id);
+                    if (status) { status.textContent = '⚠ Decrypt failed'; status.style.color = 'var(--danger)'; }
+                });
+        }
+    }
+
     function deleteMessage(id) {
-        const el = document.getElementById('msg_' + id) || document.getElementById('file_' + id);
+        const el = document.getElementById('msg_' + id) || document.getElementById('file_' + id) || document.getElementById('voice_' + id);
         if (!el) return;
         el.style.transition = 'opacity 0.35s, transform 0.35s';
         el.style.opacity = '0';
@@ -275,7 +341,87 @@ const Chat = (function () {
         reader.readAsArrayBuffer(file);
     }
 
-    /* sendMessage — Change #9 + #11 */
+    /* sendVoice — Change #14 */
+    let _mediaRecorder = null;
+    let _audioChunks   = [];
+    let _isRecording   = false;
+
+    function startRecording() {
+        if (_isRecording) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            appendSystem('⚠ Microphone not supported in this browser.');
+            return;
+        }
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function (stream) {
+                _audioChunks   = [];
+                _isRecording   = true;
+                _mediaRecorder = new MediaRecorder(stream);
+
+                const micBtn = document.getElementById('mic-btn');
+                if (micBtn) {
+                    micBtn.textContent = '🔴'; // red dot = recording
+                    micBtn.style.boxShadow = '0 0 10px rgba(255,76,106,0.7)';
+                }
+
+                _mediaRecorder.ondataavailable = function (e) {
+                    if (e.data.size > 0) _audioChunks.push(e.data);
+                };
+                _mediaRecorder.start();
+                appendSystem('🎤 Recording… Click 🔴 again to send.');
+            })
+            .catch(function () {
+                appendSystem('⚠ Microphone access denied.');
+            });
+    }
+
+    function stopAndSendRecording() {
+        if (!_isRecording || !_mediaRecorder) return;
+        _isRecording = false;
+
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) {
+            micBtn.textContent = '🎤';
+            micBtn.style.boxShadow = '';
+        }
+
+        _mediaRecorder.onstop = function () {
+            const mimeType = _mediaRecorder.mimeType || 'audio/webm';
+            const blob     = new Blob(_audioChunks, { type: mimeType });
+
+            if (blob.size === 0) { appendSystem('⚠ No audio recorded.'); return; }
+            if (blob.size > 5 * 1024 * 1024) { appendSystem('⚠ Voice message too long (max ~5 MB).'); return; }
+
+            appendSystem('🎤 Encrypting voice message…');
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const bytes = new Uint8Array(e.target.result);
+                let bin = '';
+                for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                const rawB64 = btoa(bin);
+
+                if (!SecureCrypto.isReady()) { appendSystem('⚠ Encryption not ready.'); return; }
+
+                SecureCrypto.encrypt(rawB64)
+                    .then(function (encryptedB64) {
+                        socket.emit('send_voice', {
+                            data:     encryptedB64,
+                            mimeType: mimeType,
+                        });
+                        appendSystem('🎤 Voice message sent.');
+                    })
+                    .catch(function () { appendSystem('⚠ Voice encryption failed.'); });
+            };
+            reader.readAsArrayBuffer(blob);
+
+            /* Stop all mic tracks to release microphone */
+            _mediaRecorder.stream.getTracks().forEach(function (t) { t.stop(); });
+        };
+        _mediaRecorder.stop();
+    }
+
+
     function sendMessage() {
         const input = document.getElementById('message');
         if (!input) return;
@@ -334,12 +480,26 @@ const Chat = (function () {
                 }
             });
         }
+
+        /* Change #14: mic button toggles recording on/off */
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) {
+            micBtn.addEventListener('click', function () {
+                if (_isRecording) {
+                    stopAndSendRecording();
+                } else {
+                    startRecording();
+                }
+            });
+        }
     });
+
 
     return {
         appendMessage:        appendMessage,
         appendPrivateMessage: appendPrivateMessage,
         appendFileMessage:    appendFileMessage,
+        appendVoiceMessage:   appendVoiceMessage,
         deleteMessage:        deleteMessage,
         appendSystem:         appendSystem,
         sendMessage:          sendMessage,

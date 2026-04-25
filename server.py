@@ -312,15 +312,6 @@ def handle_private_message(data):
         emit("error", {"reason": f"User '{recipient}' not found or offline."})
         return
 
-    # Packet loss simulation
-    if _packet_loss_pct > 0 and random.random() < (_packet_loss_pct / 100.0):
-        emit("packet_lost", {"pct": _packet_loss_pct})
-        return
-
-    # Packet delay simulation
-    if _packet_delay_ms > 0:
-        time.sleep(_packet_delay_ms / 1000.0)
-
     packet_id = monitor.increment_stats(len(message.encode()))
     msg_id    = str(uuid.uuid4())
 
@@ -378,6 +369,7 @@ def handle_message(data):
         "packet_id": packet_id,     # separated so client can label after decryption
         "id":        msg_id,
     })
+    # Intentionally omitted logger.info for text messages to keep terminal clean
 
     def delete_later(mid):
         time.sleep(10)
@@ -416,7 +408,44 @@ def handle_file(data):
     }
 
     socketio.emit("receive_file", payload)
-    logger.info("File transfer: %s sent '%s' (%d bytes b64)", sender, filename, len(file_data))
+    
+    # Increment file stats with the mime type
+    monitor.increment_file_stats(len(file_data), file_type)
+    
+    # Intentionally omitted logger.info for file transfers to keep terminal clean
+
+
+# =========================================
+# 🎤 VOICE MESSAGE HANDLER
+# =========================================
+
+@socketio.on("send_voice")
+def handle_voice(data):
+    sid    = request.sid
+    sender = sessions.get_username(sid)
+    if not sender:
+        return
+
+    voice_data = data.get("data", "")      # base64-encoded AES-encrypted audio
+    mime_type  = data.get("mimeType", "audio/webm")[:64]
+
+    # Enforce same ceiling as files (~5 MB audio → ~7 MB base64)
+    if len(voice_data) > 7_000_000:
+        emit("error", {"reason": "Voice message too large (max ~5 MB)"})
+        return
+
+    voice_id = str(uuid.uuid4())
+    payload  = {
+        "from":     sender,
+        "data":     voice_data,
+        "mimeType": mime_type,
+        "id":       voice_id,
+    }
+
+    socketio.emit("receive_voice", payload)
+    logger.info("Voice message: %s (%d bytes b64)", sender, len(voice_data))
+
+
 
 
 # =========================================
