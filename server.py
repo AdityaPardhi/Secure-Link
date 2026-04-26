@@ -81,6 +81,14 @@ _MAX_CIPHERTEXT_LEN = 1500
 _MAX_FILE_SIZE      = 5 * 1024 * 1024  # 5 MB plaintext limit
 MAX_USERS           = 10
 
+# Per-media-type auto-delete delays (seconds)
+_DELETE_DELAYS = {
+    'image': 30,
+    'audio': 30,
+    'other': 30,
+    'pdf':   60,
+}
+
 
 # ── Stats broadcaster ─────────────────────────────────────────
 def _broadcast_stats():
@@ -476,9 +484,12 @@ def handle_file(data):
     if not sender:
         return
 
-    filename  = str(data.get("filename", "file"))[:255]
-    file_data = data.get("data", "")       # base64-encoded (AES-encrypted) bytes
-    file_type = data.get("type", "application/octet-stream")
+    filename      = str(data.get("filename", "file"))[:255]
+    file_data     = data.get("data", "")       # base64-encoded (AES-encrypted) bytes
+    file_type     = data.get("type", "application/octet-stream")
+    media_category = data.get("mediaCategory", "other")  # image|audio|pdf|other
+    if media_category not in _DELETE_DELAYS:
+        media_category = "other"
 
     # Limit: base64 of 5 MB ≈ 7 MB
     if len(file_data) > 7_000_000:
@@ -495,10 +506,18 @@ def handle_file(data):
     }
 
     socketio.emit("receive_file", payload)
-    
+
     # Increment file stats with the mime type
     monitor.increment_file_stats(len(file_data), file_type)
-    
+
+    # Auto-delete based on media category
+    delay = _DELETE_DELAYS.get(media_category, _DELETE_DELAYS['other'])
+
+    def delete_file_later(fid, wait):
+        time.sleep(wait)
+        socketio.emit("delete_message", fid)
+
+    threading.Thread(target=delete_file_later, args=(file_id, delay), daemon=True).start()
 
 
 # =========================================
@@ -533,6 +552,13 @@ def handle_voice(data):
 
     socketio.emit("receive_voice", payload)
     logger.info("Voice message: %s (%d bytes b64)", sender, len(voice_data))
+
+    # Auto-delete voice after 30 s
+    def delete_voice_later(vid):
+        time.sleep(_DELETE_DELAYS['audio'])
+        socketio.emit("delete_message", vid)
+
+    threading.Thread(target=delete_voice_later, args=(voice_id,), daemon=True).start()
 
 
 

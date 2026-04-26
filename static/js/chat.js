@@ -46,6 +46,15 @@ const Chat = (function () {
         return '📄';
     }
 
+    /* Categorise MIME type into one of: image | audio | pdf | other */
+    function getMediaCategory(mimeType) {
+        if (!mimeType) return 'other';
+        if (mimeType.startsWith('image/'))  return 'image';
+        if (mimeType.startsWith('audio/'))  return 'audio';
+        if (mimeType === 'application/pdf') return 'pdf';
+        return 'other';
+    }
+
     /* ── Public API ──────────────────────────────────────────── */
 
     function setUsername(name) { _currentUsername = name; }
@@ -135,71 +144,161 @@ const Chat = (function () {
         }
     }
 
-    /* appendFileMessage */
+    /* appendFileMessage — renders image / audio / pdf / generic based on MIME type */
     function appendFileMessage(data) {
         const msgs = document.getElementById('messages');
         if (!msgs) return;
 
-        const isSelf = data.from === _currentUsername;
-        const wrap   = document.createElement('div');
+        const isSelf   = data.from === _currentUsername;
+        const category = getMediaCategory(data.type);
+        const wrap     = document.createElement('div');
         wrap.className = 'msg msg-file';
-        wrap.id = 'file_' + data.id;
+        wrap.id        = 'file_' + data.id;
+
+        /* ── Badge label by category ── */
+        const badgeMap = { image: '🖼 IMAGE', audio: '🔊 AUDIO', pdf: '📕 PDF', other: '📎 FILE' };
+        const badge    = badgeMap[category] || '📎 FILE';
 
         wrap.innerHTML =
             '<div class="msg-header">' +
-                '<span class="file-badge">📎 FILE</span>' +
+                '<span class="file-badge">' + badge + '</span>' +
                 '<span class="msg-user">' + escHtml(data.from) + '</span>' +
                 '<span class="msg-time">' + timestamp() + '</span>' +
             '</div>' +
-            '<div class="file-entry">' +
-                '<span class="file-icon">' + getFileIcon(data.type) + '</span>' +
-                '<div class="file-info">' +
-                    '<div class="file-name">' + escHtml(data.filename) + '</div>' +
-                    '<div class="file-status" id="fstatus_' + data.id + '">' +
-                        (isSelf ? 'Sent ✓' : 'Decrypting…') +
-                    '</div>' +
-                '</div>' +
-                '<button class="file-dl-btn" id="fdl_' + data.id + '" ' +
-                    (isSelf ? '' : 'disabled') + '>' +
-                    (isSelf ? '↗ Sent' : '⬇ Saving…') +
-                '</button>' +
+            '<div id="fmedia_' + data.id + '" class="file-media-area">' +
+                (isSelf
+                    ? '<span class="file-sent-label">↗ Sent ✓</span>'
+                    : '<span class="file-status" id="fstatus_' + data.id + '">Decrypting…</span>') +
             '</div>';
 
         msgs.appendChild(wrap);
         scrollBottom();
 
-        if (isSelf) return; // sender already has the file
+        if (isSelf) return; /* sender already has the file */
 
-        /* Decrypt and enable download */
-        if (SecureCrypto.isReady() && data.data) {
-            SecureCrypto.decrypt(data.data)
-                .then(function (base64FileData) {
-                    // Decode base64 → Uint8Array
-                    const bin    = atob(base64FileData);
-                    const bytes  = new Uint8Array(bin.length);
-                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                    const blob   = new Blob([bytes], { type: data.type || 'application/octet-stream' });
-                    const url    = URL.createObjectURL(blob);
+        if (!SecureCrypto.isReady() || !data.data) return;
 
-                    const dlBtn  = document.getElementById('fdl_' + data.id);
-                    const status = document.getElementById('fstatus_' + data.id);
-                    if (dlBtn) {
-                        dlBtn.disabled  = false;
-                        dlBtn.textContent = '⬇ Download';
-                        dlBtn.onclick = function () {
-                            const a   = document.createElement('a');
-                            a.href    = url;
-                            a.download = data.filename;
-                            a.click();
-                        };
-                    }
-                    if (status) status.textContent = 'Ready — click to download';
-                })
-                .catch(function () {
-                    const status = document.getElementById('fstatus_' + data.id);
-                    if (status) { status.textContent = '⚠ Decrypt failed'; status.style.color = 'var(--danger)'; }
-                });
-        }
+        SecureCrypto.decrypt(data.data)
+            .then(function (base64FileData) {
+                const bin   = atob(base64FileData);
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                const mime  = data.type || 'application/octet-stream';
+                const blob  = new Blob([bytes], { type: mime });
+                const url   = URL.createObjectURL(blob);
+
+                const area   = document.getElementById('fmedia_' + data.id);
+                const status = document.getElementById('fstatus_' + data.id);
+                if (!area) return;
+                area.innerHTML = ''; /* clear "Decrypting…" */
+
+                /* helper: build a standard download anchor */
+                function makeDlBtn(label) {
+                    const btn = document.createElement('a');
+                    btn.href      = url;
+                    btn.download  = data.filename;
+                    btn.className = 'file-dl-btn';
+                    btn.textContent = label || '⬇ Download';
+                    return btn;
+                }
+
+                if (category === 'image') {
+                    /* ── Inline image preview with download overlay ── */
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'img-preview-wrap';
+
+                    const img = document.createElement('img');
+                    img.src   = url;
+                    img.alt   = escHtml(data.filename);
+                    img.className = 'chat-img-preview';
+
+                    const dlBtn = makeDlBtn('⬇ Download');
+                    dlBtn.className = 'img-dl-btn';
+
+                    wrapper.appendChild(img);
+                    wrapper.appendChild(dlBtn);
+                    area.appendChild(wrapper);
+
+                } else if (category === 'audio') {
+                    /* ── HTML5 audio player ── */
+                    const player = document.createElement('audio');
+                    player.controls = true;
+                    player.src      = url;
+                    player.className = 'chat-audio-player';
+
+                    const dlBtn = makeDlBtn('⬇ Download Audio');
+                    dlBtn.className = 'file-dl-btn audio-dl-btn';
+
+                    area.appendChild(player);
+                    area.appendChild(dlBtn);
+
+                } else if (category === 'pdf') {
+                    /* ── PDF: icon + open + download ── */
+                    const row = document.createElement('div');
+                    row.className = 'file-entry';
+
+                    const icon = document.createElement('span');
+                    icon.className   = 'file-icon';
+                    icon.textContent = '📕';
+
+                    const info = document.createElement('div');
+                    info.className = 'file-info';
+
+                    const name = document.createElement('div');
+                    name.className   = 'file-name';
+                    name.textContent = data.filename;
+
+                    const openBtn = document.createElement('a');
+                    openBtn.href      = url;
+                    openBtn.target    = '_blank';
+                    openBtn.rel       = 'noopener';
+                    openBtn.className = 'pdf-open-link';
+                    openBtn.textContent = '🔍 Open PDF';
+
+                    info.appendChild(name);
+                    info.appendChild(openBtn);
+                    row.appendChild(icon);
+                    row.appendChild(info);
+                    row.appendChild(makeDlBtn('⬇ Download'));
+                    area.appendChild(row);
+
+                } else {
+                    /* ── Generic: icon + filename + download button ── */
+                    const row = document.createElement('div');
+                    row.className = 'file-entry';
+
+                    const icon = document.createElement('span');
+                    icon.className   = 'file-icon';
+                    icon.textContent = getFileIcon(data.type);
+
+                    const info = document.createElement('div');
+                    info.className = 'file-info';
+
+                    const name = document.createElement('div');
+                    name.className   = 'file-name';
+                    name.textContent = data.filename;
+
+                    const sz = document.createElement('div');
+                    sz.className   = 'file-status';
+                    sz.textContent = 'Ready';
+
+                    info.appendChild(name);
+                    info.appendChild(sz);
+                    row.appendChild(icon);
+                    row.appendChild(info);
+                    row.appendChild(makeDlBtn('⬇ Download'));
+                    area.appendChild(row);
+                }
+
+                scrollBottom();
+            })
+            .catch(function () {
+                const status = document.getElementById('fstatus_' + data.id);
+                if (status) {
+                    status.textContent = '⚠ Decrypt failed';
+                    status.style.color = 'var(--danger)';
+                }
+            });
     }
 
     /* appendVoiceMessage */
@@ -321,9 +420,10 @@ const Chat = (function () {
             SecureCrypto.encrypt(rawB64)
                 .then(function (encryptedB64) {
                     socket.emit('send_file', {
-                        filename: file.name,
-                        type:     file.type || 'application/octet-stream',
-                        data:     encryptedB64,
+                        filename:      file.name,
+                        type:          file.type || 'application/octet-stream',
+                        mediaCategory: getMediaCategory(file.type), /* image|audio|pdf|other */
+                        data:          encryptedB64,
                     });
                     appendSystem('📎 Sent: ' + file.name);
                 })
