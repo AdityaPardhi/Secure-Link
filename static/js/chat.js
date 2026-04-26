@@ -74,7 +74,7 @@ const Chat = (function () {
                 '<span class="msg-time">' + timestamp() + '</span>' +
                 '<span class="msg-enc-badge" title="AES-256-CTR encrypted">🔐</span>' +
             '</div>' +
-            '<div class="msg-text msg-decrypting">// decrypting…</div>';
+            '<div class="msg-text msg-decrypting"> decrypting…</div>';
 
         msgs.appendChild(wrap);
         scrollBottom();
@@ -119,7 +119,7 @@ const Chat = (function () {
                 '<span class="msg-user">' + direction + '</span>' +
                 '<span class="msg-time">' + timestamp() + '</span>' +
             '</div>' +
-            '<div class="msg-text msg-decrypting">// decrypting…</div>';
+            '<div class="msg-text msg-decrypting"> decrypting…</div>';
 
         msgs.appendChild(wrap);
         scrollBottom();
@@ -180,11 +180,12 @@ const Chat = (function () {
 
         SecureCrypto.decrypt(data.data)
             .then(function (base64FileData) {
-                const bin   = atob(base64FileData);
-                const bytes = new Uint8Array(bin.length);
-                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                return fetch('data:application/octet-stream;base64,' + base64FileData);
+            })
+            .then(function (res) { return res.blob(); })
+            .then(function (rawBlob) {
                 const mime  = data.type || 'application/octet-stream';
-                const blob  = new Blob([bytes], { type: mime });
+                const blob  = new Blob([rawBlob], { type: mime });
                 const url   = URL.createObjectURL(blob);
 
                 const area   = document.getElementById('fmedia_' + data.id);
@@ -342,10 +343,11 @@ const Chat = (function () {
         if (SecureCrypto.isReady() && data.data) {
             SecureCrypto.decrypt(data.data)
                 .then(function (base64Audio) {
-                    const bin    = atob(base64Audio);
-                    const bytes  = new Uint8Array(bin.length);
-                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                    const blob   = new Blob([bytes], { type: data.mimeType || 'audio/webm' });
+                    return fetch('data:application/octet-stream;base64,' + base64Audio);
+                })
+                .then(function (res) { return res.blob(); })
+                .then(function (rawBlob) {
+                    const blob   = new Blob([rawBlob], { type: data.mimeType || 'audio/webm' });
                     const url    = URL.createObjectURL(blob);
 
                     const audioEl  = document.createElement('audio');
@@ -405,12 +407,8 @@ const Chat = (function () {
 
         const reader = new FileReader();
         reader.onload = function (e) {
-            const bytes  = new Uint8Array(e.target.result);
-
-            // Encode raw bytes as base64 (the payload we'll encrypt)
-            let bin = '';
-            for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-            const rawB64 = btoa(bin);
+            const dataUrl = e.target.result;
+            const rawB64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
 
             if (!SecureCrypto.isReady()) {
                 appendSystem('⚠ Encryption not ready.');
@@ -431,7 +429,7 @@ const Chat = (function () {
                     appendSystem('⚠ File encryption failed.');
                 });
         };
-        reader.readAsArrayBuffer(file);
+        reader.readAsDataURL(file);
     }
 
     /* sendVoice */
@@ -489,10 +487,8 @@ const Chat = (function () {
 
             const reader = new FileReader();
             reader.onload = function (e) {
-                const bytes = new Uint8Array(e.target.result);
-                let bin = '';
-                for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-                const rawB64 = btoa(bin);
+                const dataUrl = e.target.result;
+                const rawB64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
 
                 if (!SecureCrypto.isReady()) { appendSystem('⚠ Encryption not ready.'); return; }
 
@@ -506,7 +502,7 @@ const Chat = (function () {
                     })
                     .catch(function () { appendSystem('⚠ Voice encryption failed.'); });
             };
-            reader.readAsArrayBuffer(blob);
+            reader.readAsDataURL(blob);
 
             /* Stop all mic tracks to release microphone */
             _mediaRecorder.stream.getTracks().forEach(function (t) { t.stop(); });

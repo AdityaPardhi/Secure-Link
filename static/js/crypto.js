@@ -17,22 +17,7 @@ const SecureCrypto = (function () {
         return bytes;
     }
 
-    function bytesToBase64(bytes) {
-        let bin = '';
-        for (let i = 0; i < bytes.length; i++) {
-            bin += String.fromCharCode(bytes[i]);
-        }
-        return btoa(bin);
-    }
-
-    function base64ToBytes(b64) {
-        const bin  = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) {
-            bytes[i] = bin.charCodeAt(i);
-        }
-        return bytes;
-    }
+    // Helpers removed to use native async browser functions
 
     /* ── Public API ──────────────────────────────────────────── */
 
@@ -60,7 +45,7 @@ const SecureCrypto = (function () {
             const iv = new Uint8Array(16);
             crypto.getRandomValues(iv);   // safe over HTTP (only subtle is restricted)
 
-            const textBytes    = aesjs.utils.utf8.toBytes(plaintext);
+            const textBytes    = new TextEncoder().encode(plaintext);
             const aesCtr       = new aesjs.ModeOfOperation.ctr(
                 Array.from(_keyBytes),
                 new aesjs.Counter(Array.from(iv))
@@ -72,7 +57,16 @@ const SecureCrypto = (function () {
             combined.set(iv, 0);
             combined.set(encryptedBytes, 16);
 
-            return Promise.resolve(bytesToBase64(combined));
+            return new Promise(function(resolve, reject) {
+                const blob = new Blob([combined], { type: 'application/octet-stream' });
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const dataUrl = e.target.result;
+                    resolve(dataUrl.substring(dataUrl.indexOf(',') + 1));
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
         } catch (e) {
             return Promise.reject(e);
         }
@@ -83,21 +77,21 @@ const SecureCrypto = (function () {
      */
     function decrypt(b64) {
         if (!_keyBytes) return Promise.reject(new Error('Crypto not initialized'));
-        try {
-            const combined       = base64ToBytes(b64);
-            const iv             = combined.slice(0, 16);
-            const ciphertext     = combined.slice(16);
+        return fetch('data:application/octet-stream;base64,' + b64)
+            .then(function(res) { return res.arrayBuffer(); })
+            .then(function(buffer) {
+                const combined = new Uint8Array(buffer);
+                const iv             = combined.slice(0, 16);
+                const ciphertext     = combined.slice(16);
 
-            const aesCtr         = new aesjs.ModeOfOperation.ctr(
-                Array.from(_keyBytes),
-                new aesjs.Counter(Array.from(iv))
-            );
-            const decryptedBytes = aesCtr.decrypt(ciphertext);
+                const aesCtr         = new aesjs.ModeOfOperation.ctr(
+                    Array.from(_keyBytes),
+                    new aesjs.Counter(Array.from(iv))
+                );
+                const decryptedBytes = aesCtr.decrypt(ciphertext);
 
-            return Promise.resolve(aesjs.utils.utf8.fromBytes(decryptedBytes));
-        } catch (e) {
-            return Promise.reject(e);
-        }
+                return new TextDecoder().decode(decryptedBytes);
+            });
     }
 
     function isReady() { return _keyBytes !== null; }

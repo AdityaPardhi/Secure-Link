@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # ── App ───────────────────────────────────────────────────────
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
-socketio = SocketIO(app, async_mode="threading")
+socketio = SocketIO(app, async_mode="threading", max_http_buffer_size=10_000_000)
 
 # ── Session setup ─────────────────────────────────────────────
 logger.info("=== SECURE LAN SERVER INITIALIZING ===")
