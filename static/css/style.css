@@ -1419,3 +1419,130 @@ body::after {
     text-decoration: underline;
 }
 
+/* ── Moderator Role Badge ───────────────────────────────────── */
+.role-badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 2px;
+    vertical-align: middle;
+}
+.mod-badge {
+    background: rgba(0, 179, 255, 0.2);
+    color: var(--accent2);
+    border: 1px solid rgba(0, 179, 255, 0.4);
+}
+
+/* ── +MOD / −MOD Button ─────────────────────────────────────── */
+.mod-btn {
+    border: 1px solid rgba(0, 179, 255, 0.5);
+    background: rgba(0, 179, 255, 0.08);
+    color: var(--accent2);
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.mod-btn:hover { background: rgba(0, 179, 255, 0.18); }
+
+/* ── Unblock Button ─────────────────────────────────────────── */
+.unblock-btn {
+    border: none;
+    background: rgba(0, 229, 160, 0.15);
+    color: var(--accent);
+    padding: 4px 9px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.unblock-btn:hover { background: rgba(0, 229, 160, 0.3); }
+
+.blocked-ip-label {
+    color: var(--danger);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+/* ── End Session Button ─────────────────────────────────────── */
+.end-session-btn {
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    padding: 10px 14px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.2s, transform 0.1s;
+    box-shadow: 0 0 20px rgba(255, 76, 106, 0.25);
+}
+.end-session-btn:hover  { opacity: 0.85; }
+.end-session-btn:active { transform: scale(0.97); }
+
+/* ── Session Report Modal ───────────────────────────────────── */
+.session-report-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 700;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 12, 16, 0.92);
+    backdrop-filter: blur(8px);
+}
+.session-report-modal.active { display: flex; }
+
+.session-report-box {
+    width: 520px;
+    max-width: 95vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 80px rgba(0, 229, 160, 0.15);
+    animation: boxReveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.session-report-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, rgba(0, 229, 160, 0.08) 0%, transparent 70%);
+    flex-shrink: 0;
+}
+
+.session-report-title {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(0, 229, 160, 0.4);
+}
+
+.session-report-content {
+    padding: 20px 22px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
+    flex: 1;
+}

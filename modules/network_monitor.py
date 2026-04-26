@@ -89,8 +89,8 @@ def format_bytes(size: float) -> str:
         size /= 1024.0
     return f"{size:.1f} PB"
 
-def generate_report(server_ip: str):
-    """Print and save the end-of-session network report (fix #13)."""
+def generate_report(server_ip: str) -> str:
+    """Print, save, and return the end-of-session network report."""
     with _lock:
         end_time   = time.time()
         duration   = end_time - _session_start
@@ -130,3 +130,5 @@ def generate_report(server_ip: str):
         logger.info("Session report saved to session.txt")
     except OSError as exc:
         logger.error("Could not write session report: %s", exc)
+
+    return report

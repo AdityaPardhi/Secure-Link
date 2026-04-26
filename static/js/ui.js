@@ -40,8 +40,9 @@ const UI = (function () {
 
         loginInProgress = true;
 
-        /* store current username for DM direction labels */
+        /* store current username for DM direction labels and role detection */
         Chat.setUsername(username);
+        _myUsername = username;
 
         const pending = document.getElementById('pending-overlay');
         if (pending) pending.classList.add('active');
@@ -159,7 +160,6 @@ const UI = (function () {
                     '<span class="user-name">' + escHtml(name) + '</span>' +
                     (ip ? '<span class="user-ip">' + escHtml(ip) + '</span>' : '');
 
-                /*  click to pre-fill /dm command */
                 li.addEventListener('click', function () {
                     const input = document.getElementById('message');
                     if (input) {
@@ -172,8 +172,24 @@ const UI = (function () {
             });
         }
 
-        /* Sync admin panel user list if this client is admin */
-        if (_isAdmin) updateAdminUserList(users);
+        /* —— Detect own role from server payload —— */
+        if (_myUsername) {
+            const me = (users || []).find(function (u) {
+                return (typeof u === 'object' ? u.username : u) === _myUsername;
+            });
+            if (me && typeof me === 'object') {
+                const newRole = me.role || 'user';
+                if (newRole !== _myRole) {
+                    _myRole = newRole;
+                    _applyRolePanel();
+                }
+            }
+        }
+
+        /* Sync ctrl panel user list if visible */
+        if (_myRole === 'admin' || _myRole === 'moderator') {
+            _renderCtrlUserList(users);
+        }
     }
 
 
@@ -226,42 +242,103 @@ const UI = (function () {
         set('stat-users',      data.users      || 0);
     }
 
-    /* ── Admin Controls ──────────────────────────────────────── */
-    let _isAdmin      = false;
-    let _adminUsername = null;
+    /* ── Role-based Control Panel ────────────────────────────── */
+    let _myRole     = 'user';   // 'user' | 'moderator' | 'admin'
+    let _myUsername = null;
 
+    /* Called when server confirms this client is the session admin */
     function onAdminAssigned(username) {
-        _isAdmin       = true;
-        _adminUsername = username;
-        const btn = document.getElementById('admin-toggle-btn');
-        if (btn) btn.style.display = 'inline-flex';
-        Chat.appendSystem('You are the session admin. ADMIN PANEL available in the top bar.');
+        _myUsername = username || _myUsername;
+        _myRole = 'admin';
+        Chat.appendSystem('⚡ You are the session admin.');
+        _applyRolePanel();
     }
 
-    function updateAdminUserList(users) {
-        const ul = document.getElementById('admin-user-list');
+    /* Show / hide the control panel and its sections based on _myRole */
+    function _applyRolePanel() {
+        const toggleBtn  = document.getElementById('ctrl-toggle-btn');
+        const adminOnly  = document.getElementById('ctrl-admin-only');
+        const titleEl    = document.getElementById('ctrl-drawer-title');
+        const drawer     = document.getElementById('ctrl-drawer');
+
+        if (_myRole === 'admin') {
+            if (toggleBtn)  { toggleBtn.style.display = 'inline-flex'; toggleBtn.textContent = '🛡 ADMIN'; }
+            if (adminOnly)  adminOnly.style.display = '';
+            if (titleEl)    titleEl.textContent = '🛡 Admin Controls';
+        } else if (_myRole === 'moderator') {
+            if (toggleBtn)  { toggleBtn.style.display = 'inline-flex'; toggleBtn.textContent = '⚙ MOD'; }
+            if (adminOnly)  adminOnly.style.display = 'none';
+            if (titleEl)    titleEl.textContent = '⚙ Moderator Controls';
+        } else {
+            /* Regular user — hide button AND forcibly close/hide drawer */
+            if (toggleBtn) toggleBtn.style.display = 'none';
+            if (drawer) {
+                drawer.classList.remove('open');
+                drawer.style.display = 'none';
+            }
+        }
+    }
+
+    /* Render the connected-users list in the control panel */
+    function _renderCtrlUserList(users) {
+        const ul = document.getElementById('ctrl-user-list');
         if (!ul) return;
         ul.innerHTML = '';
+        const isAdmin = _myRole === 'admin';
         (users || []).forEach(function (user) {
             const name = typeof user === 'object' ? user.username : user;
-            const ip   = typeof user === 'object' ? user.ip       : '';
-            if (name === _adminUsername) return; // skip self
+            const ip   = typeof user === 'object' ? user.ip   : '';
+            const role = typeof user === 'object' ? (user.role || 'user') : 'user';
+            if (name === _myUsername) return; // skip self
+            const isMod = role === 'moderator';
             const li = document.createElement('li');
             li.className = 'admin-user-item';
             li.innerHTML =
                 '<span class="admin-user-info">' +
-                    '<span class="admin-user-name">' + escHtml(name) + '</span>' +
-                    '<span class="admin-user-ip">'   + escHtml(ip)   + '</span>' +
+                    '<span class="admin-user-name">' + escHtml(name) +
+                        (isMod ? ' <span class="role-badge mod-badge">🛡 MOD</span>' : '') +
+                    '</span>' +
+                    '<span class="admin-user-ip">' + escHtml(ip) + '</span>' +
                 '</span>' +
                 '<span class="admin-user-btns">' +
                     '<button class="kick-btn"  data-user="' + escHtml(name) + '">KICK</button>' +
-                    '<button class="block-btn" data-user="' + escHtml(name) + '">BLOCK</button>' +
+                    '<button class="mute-btn"  data-user="' + escHtml(name) + '" data-muted="' +
+                        (user.muted ? 'true' : 'false') + '">' +
+                        (user.muted ? 'UNMUTE' : 'MUTE') +
+                    '</button>' +
+                    (isAdmin ?
+                        '<button class="block-btn" data-user="' + escHtml(name) + '">BLOCK</button>' +
+                        '<button class="mod-btn" data-user="' + escHtml(name) + '" data-role="' +
+                            (isMod ? 'user' : 'moderator') + '">' +
+                            (isMod ? '−MOD' : '+MOD') +
+                        '</button>' : '') +
                 '</span>';
             ul.appendChild(li);
         });
         if (!ul.children.length) {
             ul.innerHTML = '<li class="admin-no-users">No other users connected.</li>';
         }
+    }
+
+    /* Render blocked IPs list (admin only) */
+    function updateBlockedList(ips) {
+        const ul = document.getElementById('ctrl-blocked-list');
+        if (!ul) return;
+        ul.innerHTML = '';
+        if (!ips || ips.length === 0) {
+            ul.innerHTML = '<li class="admin-no-users">No blocked IPs.</li>';
+            return;
+        }
+        ips.forEach(function (ip) {
+            const li = document.createElement('li');
+            li.className = 'admin-user-item';
+            li.innerHTML =
+                '<span class="admin-user-info">' +
+                    '<span class="admin-user-name blocked-ip-label">🚫 ' + escHtml(ip) + '</span>' +
+                '</span>' +
+                '<button class="unblock-btn" data-ip="' + escHtml(ip) + '">UNBLOCK</button>';
+            ul.appendChild(li);
+        });
     }
 
     function showTerminated(reason) {
@@ -280,7 +357,7 @@ const UI = (function () {
         setTimeout(function () { banner.classList.remove('active'); }, 8000);
     }
 
-    /* ── Key bindings for login form + button listener */
+    /* ── Key bindings for login form + button listener ────────── */
     document.addEventListener('DOMContentLoaded', function () {
         const usernameInput = document.getElementById('username');
         const passwordInput = document.getElementById('password');
@@ -299,60 +376,103 @@ const UI = (function () {
             });
         }
 
-        /* addEventListener replaces inline onclick */
         const loginBtn = document.getElementById('login-btn');
         if (loginBtn) {
             loginBtn.addEventListener('click', join);
         }
 
-        /* Admin drawer toggle */
-        const toggleBtn = document.getElementById('admin-toggle-btn');
-        const drawer    = document.getElementById('admin-drawer');
-        const closeBtn  = document.getElementById('admin-close-btn');
-        if (toggleBtn && drawer) {
-            toggleBtn.addEventListener('click', function () {
-                drawer.classList.toggle('open');
+        /* ── Control Panel toggle ───────────────────────── */
+        const ctrlToggle = document.getElementById('ctrl-toggle-btn');
+        const ctrlDrawer = document.getElementById('ctrl-drawer');
+        const ctrlClose  = document.getElementById('ctrl-close-btn');
+
+        if (ctrlToggle && ctrlDrawer) {
+            ctrlToggle.addEventListener('click', function () {
+                ctrlDrawer.classList.toggle('open');
+                if (ctrlDrawer.classList.contains('open') && _myRole === 'admin') {
+                    socket.emit('get_blocked_ips');
+                }
             });
         }
-        if (closeBtn && drawer) {
-            closeBtn.addEventListener('click', function () {
-                drawer.classList.remove('open');
-            });
+        if (ctrlClose && ctrlDrawer) {
+            ctrlClose.addEventListener('click', function () { ctrlDrawer.classList.remove('open'); });
         }
 
-        /* Kick / Block delegation on admin user list */
-        const adminList = document.getElementById('admin-user-list');
-        if (adminList) {
-            adminList.addEventListener('click', function (e) {
+        /* ── User list actions (kick / mute / block / mod) ────── */
+        const ctrlUserList = document.getElementById('ctrl-user-list');
+        if (ctrlUserList) {
+            ctrlUserList.addEventListener('click', function (e) {
                 const kickBtn  = e.target.closest('.kick-btn');
+                const muteBtn  = e.target.closest('.mute-btn');
                 const blockBtn = e.target.closest('.block-btn');
+                const modBtn   = e.target.closest('.mod-btn');
                 if (kickBtn)  socket.emit('kick_user',  { username: kickBtn.dataset.user });
+                if (muteBtn) {
+                    const nowMuted = muteBtn.dataset.muted === 'true';
+                    socket.emit('set_mute', { username: muteBtn.dataset.user, muted: !nowMuted });
+                }
                 if (blockBtn) socket.emit('block_user', { username: blockBtn.dataset.user });
+                if (modBtn)   socket.emit('set_role',   { username: modBtn.dataset.user, role: modBtn.dataset.role });
             });
         }
 
-        /* Alert broadcast */
-        const alertBtn   = document.getElementById('alert-btn');
-        const alertInput = document.getElementById('alert-input');
-        if (alertBtn && alertInput) {
-            alertBtn.addEventListener('click', function () {
-                const msg = alertInput.value.trim();
+        /* ── Blocked IPs (admin only) ─────────────────────── */
+        const ctrlBlockedList = document.getElementById('ctrl-blocked-list');
+        if (ctrlBlockedList) {
+            ctrlBlockedList.addEventListener('click', function (e) {
+                const btn = e.target.closest('.unblock-btn');
+                if (btn) socket.emit('unblock_ip', { ip: btn.dataset.ip });
+            });
+        }
+
+        /* ── End Session (admin only) ────────────────────── */
+        const ctrlEndBtn = document.getElementById('ctrl-end-session-btn');
+        if (ctrlEndBtn) {
+            ctrlEndBtn.addEventListener('click', function () {
+                const m = document.getElementById('ctrl-end-confirm-modal');
+                if (m) m.style.display = 'flex';
+            });
+        }
+
+        const ctrlConfirmYes = document.getElementById('ctrl-end-confirm-yes');
+        if (ctrlConfirmYes) {
+            ctrlConfirmYes.addEventListener('click', function () {
+                document.getElementById('ctrl-end-confirm-modal').style.display = 'none';
+                socket.emit('end_session');
+            });
+        }
+        const ctrlConfirmNo = document.getElementById('ctrl-end-confirm-no');
+        if (ctrlConfirmNo) {
+            ctrlConfirmNo.addEventListener('click', function () {
+                document.getElementById('ctrl-end-confirm-modal').style.display = 'none';
+            });
+        }
+
+        /* ── Alert broadcast (admin only) ─────────────────── */
+        const ctrlAlertBtn   = document.getElementById('ctrl-alert-btn');
+        const ctrlAlertInput = document.getElementById('ctrl-alert-input');
+        if (ctrlAlertBtn && ctrlAlertInput) {
+            ctrlAlertBtn.addEventListener('click', function () {
+                const msg = ctrlAlertInput.value.trim();
                 if (!msg) return;
                 socket.emit('broadcast_alert', { message: msg });
-                alertInput.value = '';
+                ctrlAlertInput.value = '';
             });
-            alertInput.addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') alertBtn.click();
+            ctrlAlertInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') ctrlAlertBtn.click();
             });
         }
 
         /* Reconnect button on terminated overlay */
         const reconnectBtn = document.getElementById('reconnect-btn');
         if (reconnectBtn) {
-            reconnectBtn.addEventListener('click', function () {
-                window.location.reload();
-            });
+            reconnectBtn.addEventListener('click', function () { window.location.reload(); });
         }
+    });
+
+    /* ── Socket listeners for control panel ─────────────────── */
+    socket.on('blocked_ips_list', function (data) {
+        updateBlockedList(data.ips || []);
     });
 
     /* ── Reset login lock if socket disconnects ───────────────── */
@@ -364,15 +484,16 @@ const UI = (function () {
     });
 
     return {
-        join:              join,
-        onApproved:        onApproved,
-        onRejected:        onRejected,
-        updateUsers:       updateUsers,
-        updateStats:       updateStats,
-        onAdminAssigned:   onAdminAssigned,
-        showTerminated:    showTerminated,
-        showSecurityAlert: showSecurityAlert,
-        shakeEl:           shakeEl,
+        join:               join,
+        onApproved:         onApproved,
+        onRejected:         onRejected,
+        updateUsers:        updateUsers,
+        updateStats:        updateStats,
+        onAdminAssigned:    onAdminAssigned,
+        showTerminated:     showTerminated,
+        showSecurityAlert:  showSecurityAlert,
+        shakeEl:            shakeEl,
+        updateBlockedList:  updateBlockedList,
     };
 
 })();

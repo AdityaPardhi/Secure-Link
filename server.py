@@ -144,13 +144,11 @@ def handle_join(data):
     if security.is_blocked(client_ip):
         _intrusion_alert("blocked_ip_retry", client_ip, username)
         emit("rejected", {"reason": "IP blocked due to multiple failed attempts"})
-        disconnect(sid)
         return
 
     if not security.is_allowed(client_ip):
         _intrusion_alert("unauthorized_ip", client_ip, username)
         emit("rejected", {"reason": "IP not authorized"})
-        disconnect(sid)
         return
 
     if not username:
@@ -166,11 +164,16 @@ def handle_join(data):
         return
 
     if hashlib.sha256(password.encode()).hexdigest() != SESSION_PASSWORD_HASH:
-        count = security.record_failure(client_ip)
+        count   = security.record_failure(client_ip)
         blocked = security.is_blocked(client_ip)
         alert_type = "ip_blocked" if blocked else "bad_password"
         _intrusion_alert(alert_type, client_ip, username, count)
-        emit("rejected", {"reason": "Invalid access key"})
+        if blocked:
+            # IP is now blocked — reject hard and do NOT enter approval flow
+            emit("rejected", {"reason": "IP blocked due to multiple failed attempts"})
+            _broadcast_blocked_ips()
+        else:
+            emit("rejected", {"reason": "Invalid access key"})
         return
 
     security.clear_failures(client_ip)
@@ -307,6 +310,7 @@ def handle_block(data):
         return
     ip = sessions.get_ip(target_sid)
     security.block_ip(ip)
+    _broadcast_blocked_ips()
     socketio.emit("kicked",         {"reason": "Blocked by admin/moderator."},  room=target_sid)
     sessions.remove(target_sid)
     disconnect(target_sid)
@@ -368,6 +372,71 @@ def handle_transfer_admin(data):
     socketio.emit("admin_handoff", {"url": admin_url}, room=target_sid)
     socketio.emit("system_message", f"👑 Admin rights offered to {username}.")
     logger.info("Admin handoff to %s", username)
+
+
+# =========================================
+# 🚫 BLOCKED IP MANAGEMENT
+# =========================================
+
+@socketio.on("get_blocked_ips")
+def handle_get_blocked_ips():
+    sid = request.sid
+    if sid != _admin_sid and sessions.get_role(sid) not in ("moderator", "admin"):
+        return
+    blocked_list = list(security._blocked)
+    emit("blocked_ips_list", {"ips": blocked_list})
+
+
+def _broadcast_blocked_ips():
+    payload = {"ips": list(security._blocked)}
+    if _admin_sid:
+        socketio.emit("blocked_ips_list", payload, room=_admin_sid)
+    for sid, info in sessions._users.items():
+        if info.get("role") in ("moderator", "admin"):
+            socketio.emit("blocked_ips_list", payload, room=sid)
+
+@socketio.on("unblock_ip")
+def handle_unblock_ip(data):
+    sid = request.sid
+    if sid != _admin_sid and sessions.get_role(sid) not in ("moderator", "admin"):
+        return
+    ip = data.get("ip", "").strip()
+    if ip:
+        security.unblock(ip)
+        _broadcast_blocked_ips()
+        socketio.emit("system_message", f"✅ IP {ip} has been unblocked.")
+        logger.info("Admin unblocked IP: %s", ip)
+
+
+# =========================================
+# 🔴 END SESSION (Admin only)
+# =========================================
+
+@socketio.on("end_session")
+def handle_end_session():
+    if request.sid != _admin_sid:
+        return
+    logger.info("Admin triggered end_session")
+    _terminate_session("Admin ended the session.")
+
+
+def _terminate_session(reason: str):
+    """Gracefully terminate the session: emit report, disconnect all, then exit."""
+    report_str = monitor.generate_report(server_ip)
+    if _admin_sid:
+        socketio.emit("session_report", {"report": report_str}, room=_admin_sid)
+    socketio.emit("session_terminated", {"reason": reason})
+    logger.info("Session terminated: %s", reason)
+    security.save()
+
+    def _shutdown():
+        import time as _t
+        _t.sleep(2)          # give sockets time to deliver the events
+        import os as _os
+        _os.kill(_os.getpid(), 15)   # SIGTERM — triggers finally: block in __main__
+
+    threading.Thread(target=_shutdown, daemon=True).start()
+
 
 
 
@@ -585,10 +654,15 @@ def handle_disconnect():
 
     if sid == _admin_sid:
         _admin_sid = None
-        logger.warning("Admin disconnected — session terminated.")
-        socketio.emit("session_terminated", {
-            "reason": "Admin has disconnected. Session terminated."
-        })
+        logger.warning("Admin disconnected.")
+
+    # ── Session lifecycle: terminate if no admin AND no moderators remain ──
+    remaining_roles = [sessions.get_role(s) for s in sessions._users]
+    has_moderator   = "moderator" in remaining_roles
+
+    if _admin_sid is None and not has_moderator and sessions.count() > 0:
+        logger.warning("No admin or moderator remaining — auto-terminating session.")
+        _terminate_session("Session ended: no admin or moderator remaining.")
 
 
 # =========================================

@@ -523,6 +523,31 @@ input[type="range"]::-webkit-slider-thumb {
 
     </div>
 
+    <!-- Blocked Users + Session Control row -->
+    <div class="adm-bottom" style="margin-bottom:14px">
+
+        <!-- Blocked Users -->
+        <div class="adm-alert-section">
+            <div class="adm-section-label" style="color:var(--danger)">🚫 Blocked IPs</div>
+            <div id="blocked-users-list" style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto;margin-top:6px;">
+                <div class="adm-empty" id="blocked-empty">No blocked IPs.</div>
+            </div>
+        </div>
+
+        <!-- Session Control -->
+        <div class="adm-log-section" style="justify-content:center;align-items:center;gap:12px;display:flex;flex-direction:column">
+            <div class="adm-section-label">// Session Control</div>
+            <button id="end-session-btn" style="
+                background:var(--danger);color:#fff;border:none;
+                padding:12px 20px;font-family:var(--font-ui);font-size:13px;
+                font-weight:700;letter-spacing:2px;text-transform:uppercase;
+                cursor:pointer;width:100%;transition:opacity 0.2s;
+                box-shadow:0 0 20px rgba(255,76,106,0.3);
+            ">🔴 End Session</button>
+        </div>
+
+    </div>
+
     <!-- Intrusion Detection Panel -->
     <div class="adm-intrusion-panel">
         <div class="adm-intrusion-header">
@@ -565,6 +590,59 @@ input[type="range"]::-webkit-slider-thumb {
 
     </div>
 
+</div>
+
+<!-- SESSION REPORT MODAL -->
+<div id="session-report-modal" style="
+    display:none;position:fixed;inset:0;z-index:900;
+    align-items:center;justify-content:center;
+    background:rgba(8,12,16,0.93);backdrop-filter:blur(8px);
+">
+    <div style="
+        width:540px;max-width:95vw;max-height:80vh;display:flex;
+        flex-direction:column;border:1px solid var(--accent);
+        background:var(--surface);box-shadow:0 0 80px rgba(0,229,160,0.15);
+    ">
+        <div style="
+            display:flex;align-items:center;justify-content:space-between;
+            padding:14px 18px;border-bottom:1px solid var(--border);
+            background:linear-gradient(90deg,rgba(0,229,160,0.08) 0%,transparent 70%);
+        ">
+            <span style="font-family:var(--font-mono);font-size:13px;letter-spacing:3px;color:var(--accent);text-transform:uppercase;">📊 Session Report</span>
+            <button id="report-close-btn" style="background:transparent;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;">×</button>
+        </div>
+        <pre id="session-report-content" style="
+            padding:20px 22px;overflow-y:auto;font-family:var(--font-mono);
+            font-size:12px;color:var(--text);line-height:1.7;white-space:pre-wrap;
+            word-break:break-all;flex:1;margin:0;
+        "></pre>
+    </div>
+</div>
+
+<!-- END SESSION CONFIRMATION MODAL -->
+<div id="end-confirm-modal" style="
+    display:none;position:fixed;inset:0;z-index:950;
+    align-items:center;justify-content:center;
+    background:rgba(8,12,16,0.90);backdrop-filter:blur(8px);
+">
+    <div style="
+        width:360px;border:1px solid var(--danger);
+        background:var(--surface);padding:32px 28px;
+        box-shadow:0 0 60px rgba(255,76,106,0.25);
+        text-align:center;display:flex;flex-direction:column;gap:20px;
+    ">
+        <div style="font-size:28px;">⚠️</div>
+        <div style="font-family:var(--font-mono);font-size:13px;color:var(--text);letter-spacing:1px;">
+            END SESSION?
+        </div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);">
+            All connected users will be disconnected<br>and the server will shut down.
+        </div>
+        <div style="display:flex;gap:12px;justify-content:center;">
+            <button id="end-confirm-yes" style="background:var(--danger);color:#fff;border:none;padding:10px 24px;font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">CONFIRM</button>
+            <button id="end-confirm-no"  style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:10px 24px;font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">CANCEL</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -634,30 +712,79 @@ function updatePendingCount() {
     setEl('pending-count', n);
 }
 
-/* ── Connected users ─────────────────────────────────────────── */
+/* ── Connected users (persistent dot tracking) ────────────────── */
+var _knownUsers = {};  // username → { row, online }
+
 function updateUsersList(users) {
     const list = document.getElementById('users-list');
-    list.innerHTML = '';
     setEl('users-count', users ? users.length : 0);
-    if (!users || !users.length) {
-        list.innerHTML = '<div class="adm-empty">No users connected.</div>';
-        return;
-    }
-    users.forEach(function(u) {
-        const name = typeof u === 'object' ? u.username : u;
-        const ip   = typeof u === 'object' ? u.ip       : '';
-        const row = document.createElement('div');
-        row.className = 'adm-user-row';
-        row.innerHTML =
-            '<div class="adm-user-info">' +
-                '<span class="adm-user-name">' + esc(name) + '</span>' +
-                '<span class="adm-user-ip">'   + esc(ip)   + '</span>' +
-            '</div>' +
-            '<div class="adm-user-btns">' +
-                '<button class="kick-btn"  data-user="'+ esc(name) +'">KICK</button>' +
-                '<button class="block-btn" data-user="'+ esc(name) +'">BLOCK</button>' +
-            '</div>';
-        list.appendChild(row);
+
+    /* Hide empty placeholder once we get real data */
+    const empty = document.getElementById('users-empty');
+
+    const currentNames = (users || []).map(function(u) {
+        return typeof u === 'object' ? u.username : u;
+    });
+
+    /* Mark users that left as offline (grey dot) */
+    Object.keys(_knownUsers).forEach(function(name) {
+        if (!currentNames.includes(name)) {
+            var row = _knownUsers[name].row;
+            var dot = row.querySelector('.adm-online-dot');
+            if (dot) { dot.style.background = '#555'; dot.style.boxShadow = 'none'; dot.title = 'Offline'; }
+            _knownUsers[name].online = false;
+        }
+    });
+
+    /* Add new users or re-mark as online */
+    (users || []).forEach(function(u) {
+        const name   = typeof u === 'object' ? u.username : u;
+        const ip     = typeof u === 'object' ? u.ip       : '';
+        const role   = typeof u === 'object' ? (u.role || 'user') : 'user';
+        const isMod  = role === 'moderator';
+
+        if (_knownUsers[name]) {
+            /* User reconnected — turn dot green again */
+            var dot = _knownUsers[name].row.querySelector('.adm-online-dot');
+            if (dot) { dot.style.background = 'var(--accent)'; dot.style.boxShadow = '0 0 6px rgba(0,229,160,0.6)'; dot.title = 'Online'; }
+            _knownUsers[name].online = true;
+            /* Refresh buttons in case role changed */
+            var btns = _knownUsers[name].row.querySelector('.adm-user-btns');
+            if (btns) {
+                btns.innerHTML =
+                    '<button class="kick-btn"  data-user="' + esc(name) + '">KICK</button>' +
+                    '<button class="block-btn" data-user="' + esc(name) + '">BLOCK</button>' +
+                    '<button class="mod-role-btn" data-user="' + esc(name) + '" data-role="' + (isMod ? 'user' : 'moderator') + '" style="border:1px solid rgba(0,179,255,0.5);background:rgba(0,179,255,0.08);color:#00b4ff;padding:4px 8px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">' +
+                        (isMod ? '− MOD' : '+ MOD') +
+                    '</button>';
+            }
+            var nameSpan = _knownUsers[name].row.querySelector('.adm-user-name');
+            if (nameSpan) {
+                nameSpan.innerHTML = esc(name) + (isMod ? ' <span style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:1px;padding:1px 5px;border-radius:2px;background:rgba(0,179,255,0.2);color:#00b4ff;border:1px solid rgba(0,179,255,0.4);vertical-align:middle;">MOD</span>' : '');
+            }
+        } else {
+            /* Brand new user — create persistent row */
+            if (empty) empty.style.display = 'none';
+            const row = document.createElement('div');
+            row.className = 'adm-user-row';
+            row.innerHTML =
+                '<div class="adm-user-info">' +
+                    '<span class="adm-online-dot" title="Online" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px rgba(0,229,160,0.6);margin-right:8px;flex-shrink:0;vertical-align:middle;"></span>' +
+                    '<span class="adm-user-name">' + esc(name) +
+                        (isMod ? ' <span style="display:inline-block;font-size:9px;font-weight:700;letter-spacing:1px;padding:1px 5px;border-radius:2px;background:rgba(0,179,255,0.2);color:#00b4ff;border:1px solid rgba(0,179,255,0.4);vertical-align:middle;">MOD</span>' : '') +
+                    '</span>' +
+                    '<span class="adm-user-ip">' + esc(ip) + '</span>' +
+                '</div>' +
+                '<div class="adm-user-btns">' +
+                    '<button class="kick-btn"  data-user="' + esc(name) + '">KICK</button>' +
+                    '<button class="block-btn" data-user="' + esc(name) + '">BLOCK</button>' +
+                    '<button class="mod-role-btn" data-user="' + esc(name) + '" data-role="' + (isMod ? 'user' : 'moderator') + '" style="border:1px solid rgba(0,179,255,0.5);background:rgba(0,179,255,0.08);color:#00b4ff;padding:4px 8px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">' +
+                        (isMod ? '− MOD' : '+ MOD') +
+                    '</button>' +
+                '</div>';
+            list.appendChild(row);
+            _knownUsers[name] = { row: row, online: true };
+        }
     });
 }
 
@@ -681,6 +808,9 @@ socket.on('admin_auth_ok', function(data) {
         _adminKeyBytes = keyBytes;
         addLog('Chat decryption key loaded.');
     }
+
+    /* Load current blocked IPs */
+    socket.emit('get_blocked_ips');
 });
 
 /* ── AES helpers for admin monitor ──────────────────────────── */
@@ -731,6 +861,73 @@ socket.on('approval_resolved', function(data) {
 socket.on('update_users', function(users) {
     updateUsersList(users);
 });
+
+/* ── Blocked IPs ─────────────────────────────────────────────── */
+socket.on('blocked_ips_list', function(data) {
+    const container = document.getElementById('blocked-users-list');
+    const empty     = document.getElementById('blocked-empty');
+    if (!container) return;
+    container.innerHTML = '';
+    const ips = data.ips || [];
+    if (!ips.length) {
+        container.innerHTML = '<div class="adm-empty" id="blocked-empty">No blocked IPs.</div>';
+        return;
+    }
+    ips.forEach(function(ip) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border:1px solid rgba(255,76,106,0.2);background:rgba(255,76,106,0.05);';
+        row.innerHTML =
+            '<span style="font-family:var(--font-mono);font-size:12px;color:var(--danger);">🚫 ' + esc(ip) + '</span>' +
+            '<button class="unblock-btn" data-ip="' + esc(ip) + '" style="border:none;background:rgba(0,229,160,0.15);color:var(--accent);padding:3px 8px;font-family:var(--font-mono);font-size:10px;font-weight:700;cursor:pointer;">UNBLOCK</button>';
+        container.appendChild(row);
+    });
+});
+
+/* ── Session Report ──────────────────────────────────────────── */
+socket.on('session_report', function(data) {
+    const modal   = document.getElementById('session-report-modal');
+    const content = document.getElementById('session-report-content');
+    if (!modal || !content) return;
+    content.textContent = data.report || '';
+    modal.style.display = 'flex';
+    addLog('Session report received.');
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const closeBtn = document.getElementById('report-close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            document.getElementById('session-report-modal').style.display = 'none';
+        });
+    }
+
+    /* End Session button — uses custom in-page confirmation modal */
+    const endBtn = document.getElementById('end-session-btn');
+    if (endBtn) {
+        endBtn.addEventListener('click', function() {
+            document.getElementById('end-confirm-modal').style.display = 'flex';
+        });
+    }
+
+    /* Confirm end session */
+    const confirmYes = document.getElementById('end-confirm-yes');
+    if (confirmYes) {
+        confirmYes.addEventListener('click', function() {
+            document.getElementById('end-confirm-modal').style.display = 'none';
+            socket.emit('end_session');
+            addLog('End session triggered by admin.');
+        });
+    }
+
+    /* Cancel end session */
+    const confirmNo = document.getElementById('end-confirm-no');
+    if (confirmNo) {
+        confirmNo.addEventListener('click', function() {
+            document.getElementById('end-confirm-modal').style.display = 'none';
+        });
+    }
+});
+
 
 socket.on('stats_update', function(s) {
     setEl('stat-uptime',     fmtUptime(s.uptime    || 0));
@@ -797,7 +994,7 @@ socket.on('receive_file', function(data) {
     entry.innerHTML =
         '<span class="monitor-type-badge">📎 FILE</span>' +
         '<span class="monitor-label">' + esc(data.from) + '</span>' +
-        '<div class="monitor-file-card">' +
+        '<div class="monitor-file-card" id="' + fileId + '_card">' +
             '<span class="monitor-file-icon">' + getIcon(data.type) + '</span>' +
             '<div class="monitor-file-info">' +
                 '<div class="monitor-file-name">' + esc(data.filename) + '</div>' +
@@ -812,7 +1009,7 @@ socket.on('receive_file', function(data) {
     var badge = document.getElementById('monitor-count');
     if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
 
-    /* Decrypt and enable download */
+    /* Decrypt and enable download / inline preview */
     if (_adminKeyBytes && data.data) {
         var plainB64 = adminDecrypt(data.data);
         if (plainB64 && plainB64 !== '[decrypt error]' && plainB64 !== '[key not loaded]') {
@@ -820,21 +1017,41 @@ socket.on('receive_file', function(data) {
                 var bin   = atob(plainB64);
                 var bytes = new Uint8Array(bin.length);
                 for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                var blob  = new Blob([bytes], { type: data.type || 'application/octet-stream' });
+                var mime  = data.type || 'application/octet-stream';
+                var blob  = new Blob([bytes], { type: mime });
                 var url   = URL.createObjectURL(blob);
-                var dlBtn = document.getElementById(fileId + '_btn');
-                var status = document.getElementById(fileId + '_status');
-                if (dlBtn) {
-                    dlBtn.disabled = false;
-                    dlBtn.textContent = '⬇ Download';
-                    (function(u, fn) {
-                        dlBtn.onclick = function() {
-                            var a = document.createElement('a');
-                            a.href = u; a.download = fn; a.click();
-                        };
-                    })(url, data.filename);
+                var fileCard = document.getElementById(fileId + '_card');
+                var status   = document.getElementById(fileId + '_status');
+                var dlBtn    = document.getElementById(fileId + '_btn');
+
+                if (mime.startsWith('image/') && fileCard) {
+                    /* Inline image preview */
+                    fileCard.innerHTML = '';
+                    var img = document.createElement('img');
+                    img.src = url;
+                    img.alt = esc(data.filename);
+                    img.style.cssText = 'max-width:260px;max-height:180px;border-radius:4px;display:block;margin:6px 0;cursor:pointer;';
+                    img.onclick = function() { window.open(url, '_blank'); };
+                    var dlA = document.createElement('a');
+                    dlA.href = url; dlA.download = data.filename;
+                    dlA.className = 'monitor-dl-btn';
+                    dlA.style.cssText = 'display:inline-block;margin-top:4px;font-size:10px;padding:3px 8px;';
+                    dlA.textContent = '⬇ Download';
+                    fileCard.appendChild(img);
+                    fileCard.appendChild(dlA);
+                } else {
+                    if (dlBtn) {
+                        dlBtn.disabled = false;
+                        dlBtn.textContent = '⬇ Download';
+                        (function(u, fn) {
+                            dlBtn.onclick = function() {
+                                var a = document.createElement('a');
+                                a.href = u; a.download = fn; a.click();
+                            };
+                        })(url, data.filename);
+                    }
+                    if (status) status.textContent = 'Ready — click to download';
                 }
-                if (status) status.textContent = 'Ready — click to download';
             } catch(e) {
                 var st = document.getElementById(fileId + '_status');
                 if (st) { st.textContent = '⚠ Decode failed'; st.style.color = 'var(--danger)'; }
@@ -845,6 +1062,7 @@ socket.on('receive_file', function(data) {
         }
     }
 });
+
 
 function addMonitorEntry(type, label, packetId, plaintext) {
     const log   = document.getElementById('monitor-log');
@@ -920,6 +1138,12 @@ document.addEventListener('click', function(e) {
     // Block
     const blockBtn = e.target.closest('.block-btn');
     if (blockBtn) { socket.emit('block_user', { username: blockBtn.dataset.user }); return; }
+    // Set Role (Mod toggle)
+    const modBtn = e.target.closest('.mod-role-btn');
+    if (modBtn) { socket.emit('set_role', { username: modBtn.dataset.user, role: modBtn.dataset.role }); return; }
+    // Unblock IP
+    const unblockBtn = e.target.closest('.unblock-btn');
+    if (unblockBtn) { socket.emit('unblock_ip', { ip: unblockBtn.dataset.ip }); return; }
 });
 
 /* ── Alert broadcast ─────────────────────────────────────────── */

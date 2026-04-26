@@ -131,4 +131,3 @@ socket.on("security_alert", function (data) {
 socket.on("packet_lost", function (data) {
     Chat.appendSystem("⚠ Your packet was dropped (simulated " + data.pct + "% loss rate).");
 });
-

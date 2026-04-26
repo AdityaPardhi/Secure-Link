@@ -129,16 +129,57 @@
 
     <div class="topbar-spacer"></div>
 
+    <!-- Control panel toggle — shown only to admin/moderator by JS -->
+    <button id="ctrl-toggle-btn" class="admin-toggle-btn" style="display:none" title="Control Panel">⚙ CONTROLS</button>
+
     <div class="status-pill" id="conn-status">
-
         <span class="status-dot"></span> Connected
-
     </div>
 
     <div class="corner-decor">
         <span></span>
         <span></span>
         <span></span>
+    </div>
+
+</div>
+
+<!-- CONTROL PANEL DRAWER (shown to admin/mod only via JS) -->
+<div id="ctrl-drawer" class="admin-drawer">
+
+    <div class="admin-drawer-header">
+        <span class="admin-drawer-title" id="ctrl-drawer-title">⚙ Control Panel</span>
+        <button id="ctrl-close-btn" class="admin-close-btn">×</button>
+    </div>
+
+    <!-- Connected Users — visible to mod + admin -->
+    <div class="admin-section" id="ctrl-users-section">
+        <div class="admin-section-title">// Connected Users</div>
+        <ul id="ctrl-user-list"></ul>
+    </div>
+    <div class="admin-divider"></div>
+
+    <!-- Admin-only section: Blocked IPs + End Session -->
+    <div id="ctrl-admin-only" style="display:none">
+
+        <div class="admin-section">
+            <div class="admin-section-title">// Blocked IPs</div>
+            <ul id="ctrl-blocked-list"><li class="admin-no-users">Loading…</li></ul>
+        </div>
+        <div class="admin-divider"></div>
+
+        <div class="admin-section">
+            <div class="admin-section-title">// Broadcast Alert</div>
+            <input id="ctrl-alert-input" class="admin-input" placeholder="Security alert message…">
+            <button id="ctrl-alert-btn" class="alert-send-btn">⚠ Send Alert</button>
+        </div>
+        <div class="admin-divider"></div>
+
+        <div class="admin-section">
+            <div class="admin-section-title">// Session Control</div>
+            <button id="ctrl-end-session-btn" class="end-session-btn">🔴 End Session</button>
+        </div>
+
     </div>
 
 </div>
@@ -305,6 +346,29 @@ AWAITING AUTHENTICATION
 
 <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 
+<!-- End Session Confirmation Modal (user-side, admin/mod only) -->
+<div id="ctrl-end-confirm-modal" style="
+    display:none;position:fixed;inset:0;z-index:950;
+    align-items:center;justify-content:center;
+    background:rgba(8,12,16,0.90);backdrop-filter:blur(8px);
+">
+    <div style="
+        width:320px;border:1px solid var(--danger);
+        background:var(--surface);padding:28px 24px;
+        box-shadow:0 0 50px rgba(255,76,106,0.25);
+        text-align:center;display:flex;flex-direction:column;gap:18px;
+    ">
+        <div style="font-size:26px;">⚠️</div>
+        <div style="font-family:var(--font-mono);font-size:12px;color:var(--text);letter-spacing:1px;">END SESSION?</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">
+            All connected users will be disconnected<br>and the server will shut down.
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+            <button id="ctrl-end-confirm-yes" style="background:var(--danger);color:#fff;border:none;padding:8px 18px;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">CONFIRM</button>
+            <button id="ctrl-end-confirm-no"  style="background:transparent;color:var(--muted);border:1px solid var(--border);padding:8px 18px;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">CANCEL</button>
+        </div>
+    </div>
+</div>
 
 </body>
 
