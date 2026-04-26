@@ -141,4 +141,3 @@ Users connected to the same network can now communicate securely.
 ## Author
 
 Aditya Pardhi
-AI&DS Student

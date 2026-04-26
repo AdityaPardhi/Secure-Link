@@ -18,6 +18,7 @@ import uuid
 import random
 from datetime import datetime
 import socket
+import re
 
 from flask import Flask, render_template, request, abort
 from flask_socketio import SocketIO, emit, disconnect
@@ -71,11 +72,14 @@ logger.info("=" * 50)
 _admin_sid:          str | None  = None
 _pending:            dict        = {}   # sid → {username, ip, time}
 _pending_lock                    = threading.Lock()
+_recent_disconnects: dict        = {}   # username → time
 _last_message_time:  dict        = {}
+
 _MESSAGE_COOLDOWN                = 0.5
 _MAX_MESSAGE_LEN    = 500
 _MAX_CIPHERTEXT_LEN = 1500
 _MAX_FILE_SIZE      = 5 * 1024 * 1024  # 5 MB plaintext limit
+MAX_USERS           = 10
 
 
 # ── Stats broadcaster ─────────────────────────────────────────
@@ -145,6 +149,14 @@ def handle_join(data):
         emit("rejected", {"reason": "Username required"})
         return
 
+    if len(username) > 20 or not re.match(r'^[a-zA-Z0-9_\-]+$', username):
+        emit("rejected", {"reason": "Invalid username format"})
+        return
+
+    if sessions.count() >= MAX_USERS:
+        emit("rejected", {"reason": "Session full"})
+        return
+
     if hashlib.sha256(password.encode()).hexdigest() != SESSION_PASSWORD_HASH:
         count = security.record_failure(client_ip)
         blocked = security.is_blocked(client_ip)
@@ -157,6 +169,15 @@ def handle_join(data):
 
     if sessions.username_taken(username):
         emit("rejected", {"reason": "Username already taken"})
+        return
+
+    last_disconnect = _recent_disconnects.get(username)
+    if last_disconnect and time.time() - last_disconnect < 300:
+        sessions.add(sid, username, client_ip)
+        socketio.emit("approved", {"key": AES_KEY}, room=sid)
+        socketio.emit("update_users",  sessions.all_users_info())
+        socketio.emit("system_message", f"{username} reconnected seamlessly.")
+        logger.info("%s reconnected seamlessly.", username)
         return
 
     if _admin_sid is None:
@@ -173,6 +194,17 @@ def handle_join(data):
         "sid": sid, "username": username, "ip": client_ip, "time": req_time
     }, room=_admin_sid)
     logger.info("Join request queued: %s @ %s", username, client_ip)
+
+    def auto_reject_task(target_sid, target_username):
+        time.sleep(60)
+        with _pending_lock:
+            pending_data = _pending.pop(target_sid, None)
+        if pending_data:
+            socketio.emit("rejected", {"reason": "Approval timed out"}, room=target_sid)
+            socketio.emit("approval_resolved", {"sid": target_sid}, room=_admin_sid)
+            logger.info("Join request timed out for: %s", target_username)
+
+    threading.Thread(target=auto_reject_task, args=(sid, username), daemon=True).start()
 
 
 # =========================================
@@ -238,28 +270,28 @@ def handle_admin_decision(data):
 
 
 # =========================================
-# 🛡️ ADMIN KICK / BLOCK / ALERT
+# 🛡️ ADMIN / MODERATOR ACTIONS
 # =========================================
 
 @socketio.on("kick_user")
 def handle_kick(data):
-    if request.sid != _admin_sid:
+    if request.sid != _admin_sid and sessions.get_role(request.sid) != "moderator":
         return
     username   = data.get("username", "").strip()
     target_sid = sessions.find_sid_by_username(username)
     if not target_sid:
         return
-    socketio.emit("kicked",         {"reason": "Removed by admin."},  room=target_sid)
+    socketio.emit("kicked",         {"reason": "Removed by admin/moderator."},  room=target_sid)
     sessions.remove(target_sid)
     disconnect(target_sid)
     socketio.emit("update_users",   sessions.all_users_info())
-    socketio.emit("system_message", f"⚠ {username} was kicked by admin.")
+    socketio.emit("system_message", f"⚠ {username} was kicked.")
     logger.info("Kicked: %s", username)
 
 
 @socketio.on("block_user")
 def handle_block(data):
-    if request.sid != _admin_sid:
+    if request.sid != _admin_sid and sessions.get_role(request.sid) != "moderator":
         return
     username   = data.get("username", "").strip()
     target_sid = sessions.find_sid_by_username(username)
@@ -267,7 +299,7 @@ def handle_block(data):
         return
     ip = sessions.get_ip(target_sid)
     security.block_ip(ip)
-    socketio.emit("kicked",         {"reason": "Blocked by admin."},  room=target_sid)
+    socketio.emit("kicked",         {"reason": "Blocked by admin/moderator."},  room=target_sid)
     sessions.remove(target_sid)
     disconnect(target_sid)
     socketio.emit("update_users",   sessions.all_users_info())
@@ -277,12 +309,58 @@ def handle_block(data):
 
 @socketio.on("broadcast_alert")
 def handle_alert(data):
-    if request.sid != _admin_sid:
+    if request.sid != _admin_sid and sessions.get_role(request.sid) != "moderator":
         return
     message = data.get("message", "").strip()
     if message:
         socketio.emit("security_alert", {"message": message})
         logger.info("Alert broadcast: %s", message)
+
+
+@socketio.on("set_role")
+def handle_set_role(data):
+    if request.sid != _admin_sid:
+        return
+    username = data.get("username", "").strip()
+    role     = data.get("role", "user").strip()
+    target_sid = sessions.find_sid_by_username(username)
+    if not target_sid:
+        return
+    sessions.set_role(target_sid, role)
+    socketio.emit("update_users", sessions.all_users_info())
+    socketio.emit("system_message", f"👑 {username} is now a {role}.")
+    logger.info("Role changed: %s -> %s", username, role)
+
+
+@socketio.on("set_mute")
+def handle_set_mute(data):
+    if request.sid != _admin_sid and sessions.get_role(request.sid) != "moderator":
+        return
+    username = data.get("username", "").strip()
+    muted    = bool(data.get("muted", False))
+    target_sid = sessions.find_sid_by_username(username)
+    if not target_sid:
+        return
+    sessions.set_muted(target_sid, muted)
+    socketio.emit("update_users", sessions.all_users_info())
+    state = "muted" if muted else "unmuted"
+    socketio.emit("system_message", f"🔇 {username} was {state}.")
+    logger.info("Mute state: %s -> %s", username, muted)
+
+
+@socketio.on("transfer_admin")
+def handle_transfer_admin(data):
+    if request.sid != _admin_sid:
+        return
+    username = data.get("username", "").strip()
+    target_sid = sessions.find_sid_by_username(username)
+    if not target_sid:
+        return
+    admin_url = f"http://{server_ip}:5000/admin/{ADMIN_TOKEN}"
+    socketio.emit("admin_handoff", {"url": admin_url}, room=target_sid)
+    socketio.emit("system_message", f"👑 Admin rights offered to {username}.")
+    logger.info("Admin handoff to %s", username)
+
 
 
 # =========================================
@@ -292,6 +370,9 @@ def handle_alert(data):
 @socketio.on("private_message")
 def handle_private_message(data):
     sid = request.sid
+    if sessions.is_muted(sid):
+        emit("error", {"reason": "You are muted."})
+        return
     now = time.time()
     if now - _last_message_time.get(sid, 0) < _MESSAGE_COOLDOWN:
         return
@@ -346,6 +427,9 @@ def handle_private_message(data):
 @socketio.on("send_message")
 def handle_message(data):
     sid = request.sid
+    if sessions.is_muted(sid):
+        emit("error", {"reason": "You are muted."})
+        return
     now = time.time()
     if now - _last_message_time.get(sid, 0) < _MESSAGE_COOLDOWN:
         return
@@ -385,6 +469,9 @@ def handle_message(data):
 @socketio.on("send_file")
 def handle_file(data):
     sid = request.sid
+    if sessions.is_muted(sid):
+        emit("error", {"reason": "You are muted."})
+        return
     sender = sessions.get_username(sid)
     if not sender:
         return
@@ -421,6 +508,9 @@ def handle_file(data):
 @socketio.on("send_voice")
 def handle_voice(data):
     sid    = request.sid
+    if sessions.is_muted(sid):
+        emit("error", {"reason": "You are muted."})
+        return
     sender = sessions.get_username(sid)
     if not sender:
         return
@@ -462,6 +552,7 @@ def handle_disconnect():
         _pending.pop(sid, None)
 
     if user:
+        _recent_disconnects[user] = time.time()
         socketio.emit("update_users",   sessions.all_users_info())
         socketio.emit("system_message", f"{user} left the secure session.")
         logger.info("%s disconnected", user)
