@@ -589,47 +589,6 @@ def handle_file(data):
     threading.Thread(target=delete_file_later, args=(file_id, delay), daemon=True).start()
 
 
-# =========================================
-# 🎤 VOICE MESSAGE HANDLER
-# =========================================
-
-@socketio.on("send_voice")
-def handle_voice(data):
-    sid    = request.sid
-    if sessions.is_muted(sid):
-        emit("error", {"reason": "You are muted."})
-        return
-    sender = sessions.get_username(sid)
-    if not sender:
-        return
-
-    voice_data = data.get("data", "")      # base64-encoded AES-encrypted audio
-    mime_type  = data.get("mimeType", "audio/webm")[:64]
-
-    # Enforce same ceiling as files (~5 MB audio → ~7 MB base64)
-    if len(voice_data) > 7_000_000:
-        emit("error", {"reason": "Voice message too large (max ~5 MB)"})
-        return
-
-    voice_id = str(uuid.uuid4())
-    payload  = {
-        "from":     sender,
-        "data":     voice_data,
-        "mimeType": mime_type,
-        "id":       voice_id,
-    }
-
-    socketio.emit("receive_voice", payload)
-    logger.info("Voice message: %s (%d bytes b64)", sender, len(voice_data))
-
-    # Auto-delete voice after 30 s
-    def delete_voice_later(vid):
-        time.sleep(_DELETE_DELAYS['audio'])
-        socketio.emit("delete_message", vid)
-
-    threading.Thread(target=delete_voice_later, args=(voice_id,), daemon=True).start()
-
-
 
 
 # =========================================

@@ -95,10 +95,7 @@ socket.on("receive_file", function (data) {
     Chat.appendFileMessage(data);
 });
 
-/* ── Voice messages ───────────────────────────────── */
-socket.on("receive_voice", function (data) {
-    Chat.appendVoiceMessage(data);
-});
+
 
 socket.on("system_message", function (msg) {
     Chat.appendSystem(msg);
