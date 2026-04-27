@@ -1000,7 +1000,6 @@ socket.on('receive_file', function(data) {
                 '<div class="monitor-file-name">' + esc(data.filename) + '</div>' +
                 '<div class="monitor-file-status" id="' + fileId + '_status">Decrypting…</div>' +
             '</div>' +
-            '<button class="monitor-dl-btn" id="' + fileId + '_btn" disabled>⬇ Saving…</button>' +
         '</div>';
 
     log.appendChild(entry);
@@ -1009,7 +1008,7 @@ socket.on('receive_file', function(data) {
     var badge = document.getElementById('monitor-count');
     if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
 
-    /* Decrypt and enable download / inline preview */
+    /* Decrypt and enable inline preview */
     if (_adminKeyBytes && data.data) {
         var plainB64 = adminDecrypt(data.data);
         if (plainB64 && plainB64 !== '[decrypt error]' && plainB64 !== '[key not loaded]') {
@@ -1022,7 +1021,6 @@ socket.on('receive_file', function(data) {
                 var url   = URL.createObjectURL(blob);
                 var fileCard = document.getElementById(fileId + '_card');
                 var status   = document.getElementById(fileId + '_status');
-                var dlBtn    = document.getElementById(fileId + '_btn');
 
                 if (mime.startsWith('image/') && fileCard) {
                     /* Inline image preview */
@@ -1032,25 +1030,13 @@ socket.on('receive_file', function(data) {
                     img.alt = esc(data.filename);
                     img.style.cssText = 'max-width:260px;max-height:180px;border-radius:4px;display:block;margin:6px 0;cursor:pointer;';
                     img.onclick = function() { window.open(url, '_blank'); };
-                    var dlA = document.createElement('a');
-                    dlA.href = url; dlA.download = data.filename;
-                    dlA.className = 'monitor-dl-btn';
-                    dlA.style.cssText = 'display:inline-block;margin-top:4px;font-size:10px;padding:3px 8px;';
-                    dlA.textContent = '⬇ Download';
                     fileCard.appendChild(img);
-                    fileCard.appendChild(dlA);
                 } else {
-                    if (dlBtn) {
-                        dlBtn.disabled = false;
-                        dlBtn.textContent = '⬇ Download';
-                        (function(u, fn) {
-                            dlBtn.onclick = function() {
-                                var a = document.createElement('a');
-                                a.href = u; a.download = fn; a.click();
-                            };
-                        })(url, data.filename);
+                    if (status) status.textContent = 'Ready — view only';
+                    if (fileCard) {
+                        fileCard.style.cursor = 'pointer';
+                        fileCard.onclick = function() { window.open(url, '_blank'); };
                     }
-                    if (status) status.textContent = 'Ready — click to download';
                 }
             } catch(e) {
                 var st = document.getElementById(fileId + '_status');

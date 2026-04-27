@@ -193,18 +193,8 @@ const Chat = (function () {
                 if (!area) return;
                 area.innerHTML = ''; /* clear "Decrypting…" */
 
-                /* helper: build a standard download anchor */
-                function makeDlBtn(label) {
-                    const btn = document.createElement('a');
-                    btn.href      = url;
-                    btn.download  = data.filename;
-                    btn.className = 'file-dl-btn';
-                    btn.textContent = label || '⬇ Download';
-                    return btn;
-                }
-
                 if (category === 'image') {
-                    /* ── Inline image preview with download overlay ── */
+                    /* ── Inline image preview ── */
                     const wrapper = document.createElement('div');
                     wrapper.className = 'img-preview-wrap';
 
@@ -213,11 +203,7 @@ const Chat = (function () {
                     img.alt   = escHtml(data.filename);
                     img.className = 'chat-img-preview';
 
-                    const dlBtn = makeDlBtn('⬇ Download');
-                    dlBtn.className = 'img-dl-btn';
-
                     wrapper.appendChild(img);
-                    wrapper.appendChild(dlBtn);
                     area.appendChild(wrapper);
 
                 } else if (category === 'audio') {
@@ -227,14 +213,10 @@ const Chat = (function () {
                     player.src      = url;
                     player.className = 'chat-audio-player';
 
-                    const dlBtn = makeDlBtn('⬇ Download Audio');
-                    dlBtn.className = 'file-dl-btn audio-dl-btn';
-
                     area.appendChild(player);
-                    area.appendChild(dlBtn);
 
                 } else if (category === 'pdf') {
-                    /* ── PDF: icon + open + download ── */
+                    /* ── PDF: icon + open ── */
                     const row = document.createElement('div');
                     row.className = 'file-entry';
 
@@ -260,11 +242,10 @@ const Chat = (function () {
                     info.appendChild(openBtn);
                     row.appendChild(icon);
                     row.appendChild(info);
-                    row.appendChild(makeDlBtn('⬇ Download'));
                     area.appendChild(row);
 
                 } else {
-                    /* ── Generic: icon + filename + download button ── */
+                    /* ── Generic: icon + filename ── */
                     const row = document.createElement('div');
                     row.className = 'file-entry';
 
@@ -281,13 +262,12 @@ const Chat = (function () {
 
                     const sz = document.createElement('div');
                     sz.className   = 'file-status';
-                    sz.textContent = 'Ready';
+                    sz.textContent = 'Ready (View Only)';
 
                     info.appendChild(name);
                     info.appendChild(sz);
                     row.appendChild(icon);
                     row.appendChild(info);
-                    row.appendChild(makeDlBtn('⬇ Download'));
                     area.appendChild(row);
                 }
 
