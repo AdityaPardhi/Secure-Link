@@ -202,6 +202,11 @@ const Chat = (function () {
                     img.src   = url;
                     img.alt   = escHtml(data.filename);
                     img.className = 'chat-img-preview';
+                    img.style.cursor = 'pointer';
+                    img.onclick = function() {
+                        const w = window.open(url, '_blank');
+                        if (w) setTimeout(function() { w.close(); }, 30000);
+                    };
 
                     wrapper.appendChild(img);
                     area.appendChild(wrapper);
@@ -232,11 +237,14 @@ const Chat = (function () {
                     name.textContent = data.filename;
 
                     const openBtn = document.createElement('a');
-                    openBtn.href      = url;
-                    openBtn.target    = '_blank';
-                    openBtn.rel       = 'noopener';
+                    openBtn.href      = '#';
                     openBtn.className = 'pdf-open-link';
                     openBtn.textContent = '🔍 Open PDF';
+                    openBtn.onclick = function(e) {
+                        e.preventDefault();
+                        const w = window.open(url, '_blank');
+                        if (w) setTimeout(function() { w.close(); }, 60000);
+                    };
 
                     info.appendChild(name);
                     info.appendChild(openBtn);
@@ -248,6 +256,11 @@ const Chat = (function () {
                     /* ── Generic: icon + filename ── */
                     const row = document.createElement('div');
                     row.className = 'file-entry';
+                    row.style.cursor = 'pointer';
+                    row.onclick = function() {
+                        const w = window.open(url, '_blank');
+                        if (w) setTimeout(function() { w.close(); }, 30000);
+                    };
 
                     const icon = document.createElement('span');
                     icon.className   = 'file-icon';

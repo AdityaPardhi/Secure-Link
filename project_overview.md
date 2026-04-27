@@ -1,0 +1,1 @@
+When admin click on an image it largens to see the image in new tab but the users cant see the , make it the user can also tap and see it , and can we do like if the image or file opens in a new tab it can be also removed with the specific time 
